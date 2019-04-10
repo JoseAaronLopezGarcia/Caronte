@@ -1,0 +1,24 @@
+<div class="col-md-6" style="margin-top: 10%; margin-left: 20%">
+	<div class="white-box">
+		<div class="row"> <h2>REGISTER</h2> </div> <br>
+		<form ng-submit="ctx.register()">
+			<div class="row">
+				<input class="form-control" type="text" ng-model="ctx.name" placeholder="name">
+			</div>
+			<div class="row">
+				<input class="form-control" type="text" ng-model="ctx.email" placeholder="email">
+			</div>
+			<div class="row">
+				<input class="form-control" type="password" ng-model="ctx.password" placeholder="password">
+			</div>
+			<div class="row">
+				<button class="form-control" style="background-color: blue; color: white">Register</button>
+			</div>
+			<div class="row">
+				{{ctx.msg}}
+			</div>
+		</form>
+		<br>
+		<a href="#/login">Already registered? Click here!</a>
+	</div>
+</div>

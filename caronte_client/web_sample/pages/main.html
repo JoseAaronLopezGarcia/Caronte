@@ -1,0 +1,74 @@
+<div class="col-md-6" style="margin-top: 10%; margin-left: 20%">
+	<div class="white-box" ng-show="ctx.user != null">
+		<table class="table table-bordered table-hover">
+			<thead>
+				<tr class="info">
+					<td> User Name </td>
+					<td> e-mail </td>
+					<td> Join Date </td>
+					<td></td>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td> {{ctx.user.name}} </td>
+					<td> {{ctx.user.email}} </td>
+					<td> {{ctx.user.joined}} </td>
+				</tr>
+			</tbody>
+		</table>
+		<tr>Connected to: {{ctx.caronte_id}}</tr>
+		<br>
+		<tr>Ticket Validates: {{ctx.ticket}}</tr>
+		<br>
+		<tr>Service Provider Data: {{ctx.data}}</tr>
+		<tr>
+			<form ng-submit="ctx.validateTicket()">
+				<button class="form-control" style="background-color: blue; color: white">Validate Ticket</button>
+			</form>
+		</tr>
+		<tr>
+			<form ng-submit="ctx.invalidateTicket()">
+				<button class="form-control" style="background-color: blue; color: white">Invalidate Ticket</button>
+			</form>
+		</tr>
+		<tr>
+			<form ng-submit="ctx.revalidateTicket()">
+				<button class="form-control" style="background-color: blue; color: white">Revalidate Ticket</button>
+			</form>
+		</tr>
+		<tr>
+			<form ng-submit="ctx.connectServiceProvider()">
+				<button class="form-control" style="background-color: blue; color: white">Connect to Service Provider</button>
+			</form>
+		</tr>
+		<tr>
+			<form ng-submit="ctx.logout()">
+				<button class="form-control" style="background-color: blue; color: white">Logout</button>
+			</form>
+		</tr>
+		<tr>
+			<form ng-submit="ctx.updateUser()">
+				<div class="row">
+					Update User Info
+				</div>
+				<div class="row">
+					<input class="form-control" type="text" ng-model="ctx.name" placeholder="new name">
+				</div>
+				<div class="row">
+					<input class="form-control" type="password" ng-model="ctx.old_pass" placeholder="old password">
+				</div>
+				<div class="row">
+					<input class="form-control" type="password" ng-model="ctx.new_pass" placeholder="new password">
+				</div>
+				<div class="row">
+					<button class="form-control" style="background-color: blue; color: white">Update</button>
+				</div>
+				<div class="row">
+					{{ctx.msg}}
+				</div>
+				
+			</form>
+		</tr>
+	</div>
+</div>

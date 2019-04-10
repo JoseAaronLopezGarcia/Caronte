@@ -1,0 +1,47 @@
+*** 0.1:
+	- Initial project planning and design
+
+*** 0.2:
+	- Created initial user model
+	- Created initial API for registration, basic login and logout
+	- Created initial cryptographic functionality with password derivation for secure storage
+
+*** 0.3:
+	- Created Web sample
+
+*** 0.4
+	- Created initial challenge-response handshake
+	- Created token generation annd verification functions
+
+*** 0.5
+	- Created independent client libraries for cryptographic operations and protocol
+
+*** 0.6
+	- First stable version with challenge-response and ticket generation
+
+*** 0.7
+	- Added anti-replay attack protection and password strength calculation
+	- Tickets can now expire from usage
+
+*** 0.8
+	- Added protection against user password bruteforce attacks
+	- Enforced protection on replay attacks by denying communications encrypted using the User IV
+		This does not apply to second-stage of the handshake where token must still be encrypted with User IV
+	- User information retrieved from the API is now encrypted
+	- API now allows for secure user update (including password reset)
+		This update is instant and doesn't require a re-login
+		Even if you change the user's password, there's no need to refresh the user token or the session
+	- Improvements to the Web Sample that showcases how Caronte tickets work.
+		It also now allows to change user name and password on the fly, showing that no reload/relogin is required
+	- Initial protection against Man-In-The-Middle attacks
+	
+*** 0.8.1
+	- Caronte now authenticates itself to the user by issuing signed tokens (tickets)
+	- Several changes to web sample and web client libraries
+	- Simplified API and ticket handling
+	- Removed basic authentication API and code
+
+*** 0.9
+	- Authentication process with Caronte has been reduced to only one API call and one parameter (email)
+	- Cleaned up API and code: removed PUT methods from /crauth/ and /validate/
+	- Ported CaronteSecurity and CaronteClient to C
