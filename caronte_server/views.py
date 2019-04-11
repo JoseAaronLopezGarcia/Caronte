@@ -53,8 +53,8 @@ class CRAuth(APIView):
 					"IV" : user.IV, # send password IV to user,
 					"pw_iters" : CARONTE_ANTI_BRUTEFORCE_ITERS, # needed for client to calculate derived password
 					# encrypt token with derived user password, user must return unencrypted token to authenticate
-					"token" : user.active_token.createTicketForUser(token_iv),
-					"token_iv" : token_iv
+					"TGT" : user.active_token.createTicketForUser(token_iv),
+					"tgt_iv" : token_iv
 				}
 				return JsonResponse(res)
 			except:
@@ -66,13 +66,14 @@ class CRAuth(APIView):
 				# make a fake user IV, attacker should not be able to verify that the IV is fake
 				# the IV must never change for the same "user" account
 				# we must gurantee that an attacker will get the same fake IV for the same fake account
+				# an attacket must also not be able to calculate the IV from the fake email
 				salt = security.generateSalt(params["email"])
-				faked = security.encryptPBE(SECRET_KEY, "FAKE CARONTE IV", salt)
+				faked = security.encryptPBE(SECRET_KEY, params["email"], salt)
 				fake_iv = security.toB64(security.fromB64(faked)[:16]) # only 16 bytes for fake IV
 				token_iv = security.randB64()
 				fake_token = {
-					"name" : CARONTE_ID,
-					"version" : CARONTE_VERSION,
+					"name" : security.randB64(),
+					"version" : -1,
 					"token" : ""
 				}
 				for i in range(0, 5): fake_token["token"] += security.randB64()
@@ -81,8 +82,8 @@ class CRAuth(APIView):
 					"IV" : fake_iv,
 					"pw_iters" : CARONTE_ANTI_BRUTEFORCE_ITERS, # needed for client to calculate derived password
 					# encrypt token with derived user password, user must return unencrypted token to authenticate
-					"token" : security.encryptPBE(SECRET_KEY, json.dumps(fake_token), token_iv),
-					"token_iv" : token_iv
+					"TGT" : security.encryptPBE(SECRET_KEY, json.dumps(fake_token), token_iv),
+					"tgt_iv" : token_iv
 				}
 				return JsonResponse(res)
 		except:
@@ -323,7 +324,7 @@ class SampleProvider(APIView):
 				return invalidData()
 			user.active_token.revalidate()
 			user.active_token.save()
-			# here we simulate simmulate caronte's temp key
+			# here we simulate caronte returning a session key
 			rand_key = security.randB64(32) # 256-bit key
 			tmp_key = tmp_key = json.dumps({"ID": CARONTE_ID, "key":rand_key})
 			tmp_iv = security.randB64()

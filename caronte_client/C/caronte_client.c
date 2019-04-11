@@ -43,6 +43,7 @@ BOOL CaronteClient_login(CaronteClient* self, const char* email, const char* pas
 	my_free(body);
 	if (res==NULL) return 0;
 	if (res->status == 200){
+		printf("Got response:\n%s\n", res->body);
 		cJSON* jres = cJSON_Parse(res->body);
 		cJSON* jstatus = cJSON_GetObjectItem(jres, "status");
 		if (jres==NULL || jstatus==NULL) return 0;		
@@ -61,11 +62,11 @@ BOOL CaronteClient_login(CaronteClient* self, const char* email, const char* pas
 		if (pw_iters==NULL) return 0;
 		self->pw_iters = pw_iters->valuedouble;
 		
-		cJSON* jticket = cJSON_GetObjectItem(jres, "token");
+		cJSON* jticket = cJSON_GetObjectItem(jres, "TGT");
 		if (jticket==NULL) return 0;
 		char* cipherticket = jticket->valuestring;
 		
-		cJSON* token_iv = cJSON_GetObjectItem(jres, "token_iv");
+		cJSON* token_iv = cJSON_GetObjectItem(jres, "tgt_iv");
 		if (token_iv==NULL) return 0;
 		
 		// generate encrypted password used to decrypt token
@@ -332,11 +333,12 @@ BOOL CaronteClient_revalidateTicket(CaronteClient* self){
 	if (res->status == 200){
 		cJSON* jres = cJSON_Parse(res->body);
 		cJSON* status = cJSON_GetObjectItem(jres, "status");
-		cJSON* token_iv = cJSON_GetObjectItem(jres, "token_iv");
+		cJSON* tgt = cJSON_GetObjectItem(jres, "TGT");
+		cJSON* tgt_iv = cJSON_GetObjectItem(jres, "tgt_iv");
 		if (strcmp(status->valuestring, "OK")==0){
 			// create new ticket
 			size_t len;
-			char* tokendata = (char*)CaronteSecurity_decryptPBE(self->p2, cJSON_GetObjectItem(jres, "token")->valuestring, &len, token_iv->valuestring);
+			char* tokendata = (char*)CaronteSecurity_decryptPBE(self->p2, tgt->valuestring, &len, tgt_iv->valuestring);
 			cJSON* signed_token = cJSON_Parse(tokendata);
 			if (signed_token==NULL){ // decrypt error?
 				my_free(tokendata);

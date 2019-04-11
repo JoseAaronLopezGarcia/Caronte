@@ -123,11 +123,10 @@ public class CaronteClient {
 			this.p2 = CaronteSecurity.encryptPassword(password, user_iv, this.pw_iters);
 			try{
 			
-				JSONObject plain_token = new JSONObject(CaronteSecurity.decryptPBE(p2, response.getString("token"), response.getString("token_iv")));
-				String token = plain_token.getString("token");
-				this.caronte_id = plain_token.getString("name")+" "+plain_token.getString("version");
+				JSONObject plain_ticket = new JSONObject(CaronteSecurity.decryptPBE(p2, response.getString("TGT"), response.getString("tgt_iv")));
+				this.caronte_id = plain_ticket.getString("name")+" "+plain_ticket.getString("version");
 				this.ticket = new JSONObject();
-				this.ticket.put("t", token);
+				this.ticket.put("t", plain_ticket.getString("token"));
 				this.ticket.put("c", 1);
 				this.ticket.put("user_iv", user_iv);
 				this.cookie = con.getHeaderField("Set-Cookie");
@@ -325,8 +324,8 @@ public class CaronteClient {
 		
 		if (response.getString("status").equals("OK")){
 			// create new ticket
-			JSONObject signed_token = new JSONObject(CaronteSecurity.decryptPBE(this.p2, response.getString("token"), response.getString("token_iv")));
-			this.ticket.put("t", signed_token.getString("token"));
+			JSONObject plain_ticket = new JSONObject(CaronteSecurity.decryptPBE(this.p2, response.getString("TGT"), response.getString("tgt_iv")));
+			this.ticket.put("t", plain_ticket.getString("token"));
 			this.ticket.put("c", 1);
 			return true;
 		}

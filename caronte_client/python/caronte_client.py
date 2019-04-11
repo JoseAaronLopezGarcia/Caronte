@@ -35,13 +35,11 @@ class CaronteClient:
 			if data["status"] != "OK":
 				return False
 			self.p2, _ = CaronteSecurity.encryptPassword(password, data["IV"], data["pw_iters"]);
-			token = None
 			try:
-				plain_token = json.loads(CaronteSecurity.decryptPBE(self.p2, data["token"], data["token_iv"]));
-				token = plain_token["token"];
-				self.caronte_id = plain_token["name"]+" "+plain_token["version"];
+				plain_ticket = json.loads(CaronteSecurity.decryptPBE(self.p2, data["TGT"], data["tgt_iv"]));
+				self.caronte_id = plain_ticket["name"]+" "+plain_ticket["version"];
 				print("Connected to:", self.caronte_id);
-				self.ticket = {"t":token, "c":1, "user_iv":data["IV"]};
+				self.ticket = {"t":plain_ticket["token"], "c":1, "user_iv":data["IV"]};
 				self.header["cookie"] = res.getheader('set-cookie')
 				self.pw_iters = data["pw_iters"]
 				return True;
@@ -130,8 +128,8 @@ class CaronteClient:
 		if (res.status == 200):
 			data = json.loads(res.read().decode("UTF-8"))
 			if (data["status"] == "OK"):
-				signed_token = json.loads(CaronteSecurity.decryptPBE(self.p2, data["token"], data["token_iv"]))
-				self.ticket["t"] = signed_token["token"]
+				plain_ticket = json.loads(CaronteSecurity.decryptPBE(self.p2, data["TGT"], data["tgt_iv"]))
+				self.ticket["t"] = plain_ticket["token"]
 				self.ticket["c"] = 1
 				return True
 		return False

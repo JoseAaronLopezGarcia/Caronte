@@ -100,7 +100,9 @@ class Token(models.Model):
 		return security.encryptPBE(self.owner.getPassword(), data, iv)
 	
 	def validate(self, user_token, expiration=True):
-		if type(user_token) == type(""): user_token = json.loads(user_token)
+		if type(user_token) == type(""):
+			try: user_token = json.loads(user_token)
+			except: return False
 		if not security.verifyPassword(self.sys_data, user_token["t"], self.IV):
 			return False # invalid token
 		if user_token["user_iv"] != self.owner.IV:

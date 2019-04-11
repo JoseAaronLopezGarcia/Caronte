@@ -30,9 +30,9 @@ function CaronteClient(protocol, host, port) {
 				this.pw_iters = data["pw_iters"];
 				this.p2 = CaronteSecurity.encryptPassword(password, data["IV"], data["pw_iters"]);
 				try{
-					var plain_token = JSON.parse(CaronteSecurity.decryptPBE(this.p2, data["token"], data["token_iv"]));
-					var token = plain_token["token"];
-					this.caronte_id = plain_token["name"]+" "+plain_token["version"];
+					var plain_ticket = JSON.parse(CaronteSecurity.decryptPBE(this.p2, data["TGT"], data["tgt_iv"]));
+					var token = plain_ticket["token"];
+					this.caronte_id = plain_ticket["name"]+" "+plain_ticket["version"];
 					console.log("Connected to: "+this.caronte_id);
 					this.ticket = {"t":token, "c":1, "user_iv":data["IV"]};
 					return true;
@@ -172,11 +172,11 @@ function CaronteClient(protocol, host, port) {
 				console.log(res);
 				if (res["status"] == "OK"){
 					// create new ticket
-					var signed_token = JSON.parse(CaronteSecurity.decryptPBE(this.p2, res["token"], res["token_iv"]));
-					console.log(signed_token);
-					this.ticket["t"] = signed_token["token"];
+					var plain_ticket = JSON.parse(CaronteSecurity.decryptPBE(this.p2, res["token"], res["token_iv"]));
+					console.log(plain_ticket);
+					this.ticket["t"] = plain_ticket["token"];
 					this.ticket["c"] = 1;
-					console.log("Resigned with "+signed_token["name"]+" "+signed_token["version"]);
+					console.log("Resigned with "+plain_ticket["name"]+" "+plain_ticket["version"]);
 					return true;
 				}
 			}
