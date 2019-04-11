@@ -33,7 +33,7 @@ ALLOWED_HOSTS = ['*']
 CARONTE_ID = "Caronte Authentication Server"
 CARONTE_VERSION = "0.9"
 
-# File where Caronte issues logs (cwd by default)
+# File where Caronte issues logs (home by default)
 CARONTE_LOG_FILE = "~/caronte_log.txt"
 
 # Resetting a password using the same password is usually a bad idea
@@ -48,6 +48,8 @@ CARONTE_ANTI_BRUTEFORCE_ITERS = 50000
 # User registration API should be disabled by default unless using HTTPS
 CARONTE_ALLOW_REGISTRATION = False
 
+# We don't want the user to issue an infinite ammount of tickets using the same token
+CARONTE_MAX_TOKEN_COUNT = 10
 
 ############### DJANGO CONFIGURATION #######################
 

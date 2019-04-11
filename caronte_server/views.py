@@ -39,56 +39,55 @@ class CRAuth(APIView):
 		return invalidData()
 
 	def post(self, request): # authenticate
+		params = None
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
 			if "email" not in params: return invalidData()
-			try:
-				user = User.objects.filter(email=params["email"]).get()
-				request.session["user"] = user.id
-				user.status = User.LOGGED_IN
-				Token.generateNew(user)
-				token_iv = security.randB64()
-				res = {
-					"status" : STAT_OK,
-					"IV" : user.IV, # send password IV to user,
-					"pw_iters" : CARONTE_ANTI_BRUTEFORCE_ITERS, # needed for client to calculate derived password
-					# encrypt token with derived user password, user must return unencrypted token to authenticate
-					"TGT" : user.active_token.createTicketForUser(token_iv),
-					"tgt_iv" : token_iv
-				}
-				return JsonResponse(res)
-			except:
-				# for security reasons (anti reverse brute-force) we must always act as if user exists
-				# so in case an invalid email is given (possible attack) we return random (invalid) ticket
-				# this will do two things: remove any user information (attacker can't know if a user exists)
-				# and it will also slow down an attacker as it will be force to decipher an incorrect ticket
-				log("ERROR: attempt to login with fake account <%s>, generating fake ticket..."%params["email"])
-				# make a fake user IV, attacker should not be able to verify that the IV is fake
-				# the IV must never change for the same "user" account
-				# we must gurantee that an attacker will get the same fake IV for the same fake account
-				# an attacket must also not be able to calculate the IV from the fake email
-				salt = security.generateSalt(params["email"])
-				faked = security.encryptPBE(SECRET_KEY, params["email"], salt)
-				fake_iv = security.toB64(security.fromB64(faked)[:16]) # only 16 bytes for fake IV
-				token_iv = security.randB64()
-				fake_token = {
-					"name" : security.randB64(),
-					"version" : -1,
-					"token" : ""
-				}
-				for i in range(0, 5): fake_token["token"] += security.randB64()
-				res = {
-					"status" : STAT_OK,
-					"IV" : fake_iv,
-					"pw_iters" : CARONTE_ANTI_BRUTEFORCE_ITERS, # needed for client to calculate derived password
-					# encrypt token with derived user password, user must return unencrypted token to authenticate
-					"TGT" : security.encryptPBE(SECRET_KEY, json.dumps(fake_token), token_iv),
-					"tgt_iv" : token_iv
-				}
-				return JsonResponse(res)
+		except: return invalidData()
+		try:
+			user = User.objects.filter(email=params["email"]).get()
+			request.session["user"] = user.id
+			user.status = User.LOGGED_IN
+			Token.generateNew(user)
+			token_iv = security.randB64()
+			res = {
+				"status" : STAT_OK,
+				"IV" : user.IV, # send password IV to user,
+				"pw_iters" : CARONTE_ANTI_BRUTEFORCE_ITERS, # needed for client to calculate derived password
+				# encrypt token with derived user password, user must return unencrypted token to authenticate
+				"TGT" : user.active_token.createTicketForUser(token_iv),
+				"tgt_iv" : token_iv
+			}
+			return JsonResponse(res)
 		except:
-			traceback.print_exc()
-			return invalidData()
+			# for security reasons (anti reverse brute-force) we must always act as if user exists
+			# so in case an invalid email is given (possible attack) we return random (invalid) ticket
+			# this will do two things: remove any user information (attacker can't know if a user exists)
+			# and it will also slow down an attacker as it will be force to decipher an incorrect ticket
+			log("ERROR: attempt to login with fake account <%s>, generating fake ticket..."%params["email"])
+			# make a fake user IV, attacker should not be able to verify that the IV is fake
+			# the IV must never change for the same "user" account
+			# we must gurantee that an attacker will get the same fake IV for the same fake account
+			# an attacket must also not be able to calculate the IV from the fake email
+			salt = security.generateSalt(params["email"])
+			faked = security.encryptPBE(SECRET_KEY, params["email"], salt)
+			fake_iv = security.toB64(security.fromB64(faked)[:16]) # only 16 bytes for fake IV
+			token_iv = security.randB64()
+			fake_token = {
+				"name" : security.randB64(),
+				"version" : -1,
+				"token" : ""
+			}
+			for i in range(0, 5): fake_token["token"] += security.randB64()
+			res = {
+				"status" : STAT_OK,
+				"IV" : fake_iv,
+				"pw_iters" : CARONTE_ANTI_BRUTEFORCE_ITERS, # needed for client to calculate derived password
+				# encrypt token with derived user password, user must return unencrypted token to authenticate
+				"TGT" : security.encryptPBE(SECRET_KEY, json.dumps(fake_token), token_iv),
+				"tgt_iv" : token_iv
+			}
+			return JsonResponse(res)
 	
 	def put(self, request):
 		return invalidData()
@@ -110,38 +109,18 @@ class Validator(APIView):
 			if "ticket" not in params or params["ticket"] == None:
 				return invalidData()
 			user = User.objects.filter(email=params["ticket"]["email"]).get()
-			if user.id != request.session["user"] or user.active_token == None:
+			if user.active_token == None:
 				log("ERROR: user <%s> verifies with wrong session"%user.email)
 				return invalidData()
-			ticket = params["ticket"]["creds"]
-			ticket_iv = params["ticket"]["iv"]
-			if ticket_iv == user.IV:
-				log("ERROR: misuse of User IV in communication (Verify/post) by <%s>"%user.email)
+			if not user.active_token.verifyUserTicket(params, request.session):
+				log("ERROR: user <%s> verifies with wrong ticket"%user.email)
 				return invalidData()
-			user_token = security.decryptPBE(user.getPassword(), ticket, ticket_iv)
-			if not user.active_token.validate(user_token):
-				log("ERROR: user <%s> verifies with wrong token"%user.email)
-				user.active_token.invalidate()
-				user.active_token.save()
-				return invalidData()
-			user.active_token.revalidate()
-			user.active_token.save()
 			if "other" in params and params["other"] != None:
 				other = security.decryptPBE(user.getPassword(), params["other"], ticket_iv)
 				o_user = User.objects.filter(email=other["email"]).get()
-				o_ticket = other["creds"]
-				o_ticket_iv = other["iv"]
-				if o_ticket_iv == o_user.IV:
-					log("ERROR: misuse of User IV in communication (Verify/post/other) by <%s>"%o_user.email)
-					return invalidData()
-				o_user_token = security.decryptPBE(o_user.getPassword(), o_ticket, o_ticket_iv)
-				if not o_user.active_token.validate(o_user_token):
-					log("ERROR: user <%s> received wrong token from <%s>"%(user.email, o_user.email))
-					o_user.active_token.invalidate()
-					o_user.active_token.save()
+				if not o_user.active_token.verifyUserTicket(params, request.session):
+					log("ERROR: user <%s> received wrong ticket from <%s>"%(user.email, o_user.email))
 					return genericError("Other ticket not verified")
-				o_user.active_token.revalidate()
-				o_user.active_token.save()
 				tmp_key = json.dumps({"ID": CARONTE_ID, "key":security.randB64(32)}) # 256-bit key
 				tmp_iv = security.randB64()
 				res = {
@@ -210,20 +189,15 @@ class Registration(APIView):
 			if "ticket" not in params or params["ticket"] == None:
 				return invalidData()
 			user = User.objects.filter(email=params["ticket"]["email"]).get() # update user information
-			if user.id != request.session["user"] or user.active_token == None:
+			if user.active_token == None:
 				log("ERROR: user <%s> updates with wrong session"%user.email)
 				return invalidData()
-			ticket_iv = params["ticket"]["iv"]
-			if ticket_iv == user.IV:
-				log("ERROR: misuse of User IV in communication (Register/put) by <%s>"%user.email)
+			if not user.active_token.verifyUserTicket(params, request.session):
+				log("ERROR: user <%s> updates with wrong ticket"%user.email)
 				return invalidData()
-			ticket = security.decryptPBE(user.getPassword(), params["ticket"]["creds"], ticket_iv)
-			if not user.active_token.validate(ticket):
-				log("ERROR: user <%s> updates with wrong token"%user.email)
-				user.active_token.invalidate()
-				user.active_token.save()
-				return invalidData()
-			_ticket = json.loads(ticket)
+			cipher_ticket = params["ticket"]["creds"]
+			cipher_ticket = params["ticket"]["iv"]
+			ticket = json.loads(security.decryptPBE(user.getPassword(), cipher_ticket, ticket_iv))
 			if "extra_data" in _ticket:
 				ticket_data = _ticket["extra_data"]
 				if "name" in ticket_data and len(ticket_data["name"].strip()) > 0:
@@ -237,8 +211,6 @@ class Registration(APIView):
 						if user.verifyPassword(new_pass) and not CARONTE_ALLOW_SAME_PW_RESET:
 							return invalidData() # disallow user to reset same password
 						user.setPassword(new_pass)
-			user.active_token.revalidate()
-			user.active_token.save()
 			user.save()
 			res = {
 				"status" : STAT_OK,
@@ -256,19 +228,14 @@ class Registration(APIView):
 			if "ticket" not in params or params["ticket"] == None:
 				return invalidData()
 			user = User.objects.filter(email=params["ticket"]["email"]).get()
-			if user.id != request.session["user"] or user.active_token == None:
+			if user.active_token == None:
 				log("ERROR: user <%s> logs out with wrong session"%user.email)
 				return invalidData()
-			ticket_iv = params["ticket"]["iv"]
-			if ticket_iv == user.IV:
-				log("ERROR: misuse of User IV in communication (Register/delete) by <%s>"%user.email)
-				return invalidData()
-			ticket = security.decryptPBE(user.getPassword(), params["ticket"]["creds"], ticket_iv)
-			user.active_token.invalidate()
-			user.active_token.save()
-			if not user.active_token.validate(ticket, False):
-				log("ERROR: user <%s> logs out with wrong token"%user.email)
-				#return invalidData() # issue logout despite wrong ticket
+			if not user.active_token.verifyUserTicket(params, request.session):
+				log("ERROR: user <%s> logs out with wrong ticket"%user.email)
+			else:
+				user.active_token.invalidate()
+				user.active_token.save()
 			user.status = User.LOGGED_OUT
 			user.active_token = None
 			user.save()
@@ -311,19 +278,11 @@ class SampleProvider(APIView):
 			"""
 			# here we emulate sending the ticket to Caronte for validation
 			user = User.objects.filter(email=params["ticket"]["email"]).get();
-			ticket = params["ticket"]["creds"]
-			ticket_iv = params["ticket"]["iv"]
-			if ticket_iv == user.IV:
-				log("ERROR: misuse of User IV in communication (Verify/post) by <%s>"%user.email)
+			if user.active_token == None:
 				return invalidData()
-			user_token = security.decryptPBE(user.getPassword(), ticket, ticket_iv)
-			if not user.active_token.validate(user_token):
+			if not user.active_token.verifyUserTicket(params, request.session):
 				log("ERROR: user <%s> logs in to SampleProvider with wrong ticket"%user.email)
-				user.active_token.invalidate()
-				user.active_token.save()
 				return invalidData()
-			user.active_token.revalidate()
-			user.active_token.save()
 			# here we simulate caronte returning a session key
 			rand_key = security.randB64(32) # 256-bit key
 			tmp_key = tmp_key = json.dumps({"ID": CARONTE_ID, "key":rand_key})

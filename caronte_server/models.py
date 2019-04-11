@@ -1,4 +1,4 @@
-import json
+import json, traceback
 
 from django.db import models
 
@@ -6,6 +6,7 @@ from caronte.settings import SECRET_KEY
 from caronte.settings import CARONTE_ID
 from caronte.settings import CARONTE_VERSION
 from caronte.settings import CARONTE_ANTI_BRUTEFORCE_ITERS
+from caronte.settings import CARONTE_MAX_TOKEN_COUNT
 from caronte.common import log
 
 from caronte_client.python import caronte_security as security
@@ -20,7 +21,6 @@ class User(models.Model):
 	last_active = models.DateTimeField(auto_now=True)
 	active_token = models.ForeignKey('Token', on_delete=models.SET_NULL, null=True)
 	IV = models.CharField(max_length=500, blank=True, null=True)
-	login_type = models.IntegerField(null=False, default=2)
 	pw_score = models.IntegerField(null=False, default=0)
 	
 	# state of a user account
@@ -28,11 +28,6 @@ class User(models.Model):
 	LOGGED_IN = 1 # user is logged in
 	LOGGED_OUT = 2 # user is not logged in
 	BLOCKED = 3 # user account has been blocked
-	
-	# types of login allowed for this user
-	LOGIN_ANY = 0 # can use any login mechanism
-	LOGIN_BASIC = 1 # must use basic login API
-	LOGIN_CR = 2 # must use Challenge-Response API
 	
 	def setPassword(self, password):
 		self.p2, self.IV = security.encryptPassword(password, iter_count=CARONTE_ANTI_BRUTEFORCE_ITERS)
@@ -81,6 +76,7 @@ class Token(models.Model):
 		token.owner = owner
 		token.sys_data = security.randB64()+security.generateSalt(str(token.timestamp))
 		token.user_data, token.IV = security.encryptPassword(token.sys_data)
+		token.ctr = 0
 		token.save()
 		if owner.active_token != None:
 			owner.active_token.invalidate()
@@ -99,20 +95,55 @@ class Token(models.Model):
 		if iv == None: iv = self.owner.IV
 		return security.encryptPBE(self.owner.getPassword(), data, iv)
 	
-	def validate(self, user_token, expiration=True):
-		if type(user_token) == type(""):
-			try: user_token = json.loads(user_token)
-			except: return False
-		if not security.verifyPassword(self.sys_data, user_token["t"], self.IV):
-			return False # invalid token
-		if user_token["user_iv"] != self.owner.IV:
-			return False
-		if (expiration):
-			if user_token["c"] <= self.ctr:
-				log("WARNING: pausible replay attack on user <%s>"%self.owner.email)
+	def verifyUserTicket(self, params, session):
+		ret = False
+		if self._validate(params, session):
+			self.revalidate()
+			ret = True
+		else:
+			self.invalidate()
+			session["used_iv"] = dict()
+		self.save()
+		return ret
+	
+	def _validate(self, params, session):
+		try:
+			user = self.owner
+			if not self.valid:
+				log("ERROR: user <%s> attempts to validate invalidated ticket"%user.email)
 				return False
-			return self.valid and user_token["c"] == self.ctr+1
-		return True
+			if "user" not in session or session["user"] != user.id:
+				log("ERROR: user <%s> verifies with wrong session"%user.email)
+				return False
+			ticket = params["ticket"]["creds"]
+			ticket_iv = params["ticket"]["iv"]
+			if ticket_iv == user.IV:
+				log("ERROR: misuse of User IV in communication by <%s>"%user.email)
+				return False
+			if "used_iv" not in session: session["used_iv"] = dict()
+			if ticket_iv in session["used_iv"]:
+				log("ERROR: reuse of IV in communication by <%s>"%user.email)
+				return False
+			used_iv = dict(session["used_iv"])
+			used_iv[ticket_iv] = True
+			session["used_iv"] = used_iv
+			user_token = json.loads(security.decryptPBE(user.getPassword(), ticket, ticket_iv))
+			if not security.verifyPassword(self.sys_data, user_token["t"], self.IV):
+				log("ERROR: user <%s> provides incorrect token"%user.email)
+				return False
+			if user_token["user_iv"] != self.owner.IV:
+				log("ERROR: user IV in ticket does not match for <%s>"%user.email)
+				return False
+			if user_token["c"] != self.ctr+1:
+				log("ERROR: pausible replay attack on user <%s>, token count does not match"%self.owner.email)
+				return False
+			if self.ctr >= CARONTE_MAX_TOKEN_COUNT:
+				log("ERROR: user <%s> has exceed maximum allowed tickets for token"%user.email)
+				return False
+			return True
+		except:
+			traceback.print_exc()
+			return False
 	
 	def invalidate(self):
 		self.valid = False
