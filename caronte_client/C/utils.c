@@ -59,3 +59,10 @@ long String_hash(const char* str){
 
 	return (x == -1)? -2 : x;
 }
+
+char* String_dup(const char* str){
+	size_t len = strlen(str);
+	char* copy = (char*)caronte_malloc(len+1);
+	strcpy(copy, str);
+	return copy;
+}

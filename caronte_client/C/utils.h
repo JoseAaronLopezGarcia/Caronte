@@ -24,5 +24,6 @@ void caronte_setfree(void (my_free)(void*));
 
 int String_isEmpty(const char* line);
 long String_hash(const char* str);
+char* String_dup(const char* str);
 
 #endif

@@ -103,6 +103,8 @@ class Token(models.Model):
 		if type(user_token) == type(""): user_token = json.loads(user_token)
 		if not security.verifyPassword(self.sys_data, user_token["t"], self.IV):
 			return False # invalid token
+		if user_token["user_iv"] != self.owner.IV:
+			return False
 		if (expiration):
 			if user_token["c"] <= self.ctr:
 				log("WARNING: pausible replay attack on user <%s>"%self.owner.email)

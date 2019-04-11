@@ -98,7 +98,7 @@ DerivedPassword* CaronteSecurity_derivePassword(const char* password){
 }
 
 char* CaronteSecurity_encryptPassword(const char* password, const char* IV, size_t iters){
-	char* pw = strdup(password);
+	char* pw = String_dup(password);
 	DerivedPassword* derived;
 	for (int i=0; i<iters; i++){
 		derived = CaronteSecurity_derivePassword(pw);

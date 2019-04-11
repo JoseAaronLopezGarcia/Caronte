@@ -1,0 +1,9 @@
+TODO List in order of importance
+
+- Update java and python libraries
+- Integrate client libraries into Yuneta server
+- Integrate client libraries into Yuneta client
+- Do the first tests with Yuneta server, Yuneta client and Caronte
+- V1 Of Caronte up and running!
+- Start working on V2 (user permissions, service management, etc)
+

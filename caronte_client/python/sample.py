@@ -32,9 +32,10 @@ def main():
 	
 	print("Login:", caronte_conn.login("test@caronte.com", "Caront3Te$t"))
 	user = caronte_conn.getUserDetails()
-	print("User name:", user["name"])
-	print("e-mail:", user["email"])
-	print("Joined:", user["joined"])
+	if user != None:
+		print("User name:", user["name"])
+		print("e-mail:", user["email"])
+		print("Joined:", user["joined"])
 	print("Ticket validates:", caronte_conn.validateTicket())
 	print("Invalidate:", caronte_conn.invalidateTicket())
 	print("Validate:", caronte_conn.validateTicket())

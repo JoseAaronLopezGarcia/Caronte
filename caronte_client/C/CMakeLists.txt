@@ -12,7 +12,7 @@ include(CheckSymbolExists)
 set(INC_DEST_DIR ${CMAKE_INSTALL_PREFIX}/include)
 set(LIB_DEST_DIR ${CMAKE_INSTALL_PREFIX}/lib)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -std=c99")
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
   add_definitions(-DDEBUG)

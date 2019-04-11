@@ -31,7 +31,9 @@ HTTP_Response* HTTP_Client_call(HTTP_Client* self, const char* method, const cha
 		(self->cookie!=NULL)?self->cookie:empty, body);
 	buflen = strlen(sendbuf);
 	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	connect(sockfd, (struct sockaddr *)&(self->serv_addr), sizeof(self->serv_addr));
+	if (sockfd<0) return NULL;
+	if (connect(sockfd, (struct sockaddr *)&(self->serv_addr), sizeof(self->serv_addr))<0)
+		return NULL;
 	while (write(sockfd, sendbuf, buflen)!=buflen);
 	while ((n = read(sockfd, recvbuf, 1024)) > 0){
 		if (result==NULL){
@@ -65,13 +67,13 @@ HTTP_Response* HTTP_Response_parse(const char* response){
 	HTTP_Response self;
 	if (strncmp(response, "HTTP/", 5)!=0)
 		return NULL;
-	char* tmp = strdup(response); // buffer used to build parsed http table
+	char* tmp = String_dup(response); // buffer used to build parsed http table
 	int len = strlen(tmp);
 	int max = 32;
 	char** headers = (char**)my_malloc(sizeof(char*)*max);
 	char* body = NULL;
 	headers[0] = tmp;
-	self.origin = strdup(response);
+	self.origin = String_dup(response);
 	self.n = 1;
 	for (int i=0; i<len; i++){
 		if (tmp[i] == '\n'){

@@ -99,6 +99,7 @@ int loginToProvider(CaronteClient* client){
 		HTTP_Response* res = HTTP_Client_call(client->http, "POST", "/provider/", body);
 		my_free(body);
 		my_free(ticket);
+		if (res==NULL) return 0;
 		if (res->status == 200){
 			cJSON* jres = cJSON_Parse(res->body);
 			cJSON* status = cJSON_GetObjectItem(jres, "status");
@@ -118,6 +119,7 @@ int loginToProvider(CaronteClient* client){
 char* getProviderData(CaronteClient* client){
 	char* secret_data = NULL;
 	HTTP_Response* res = HTTP_Client_call(client->http, "GET", "/provider/", "");
+	if (res==NULL) return NULL;
 	// request data to service provider
 	if (res->status == 200){
 		cJSON* jres = cJSON_Parse(res->body);
@@ -135,6 +137,7 @@ char* getProviderData(CaronteClient* client){
 }
 
 void CaronteClient_test(){
+	printf("Caronte client test\n");
 	CaronteClient client;
 	CaronteClient_connect(&client, "127.0.0.1", 8000);
 	int login_res = CaronteClient_login(&client, "test@caronte.com", "Caront3Te$t");

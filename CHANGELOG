@@ -44,4 +44,8 @@
 *** 0.9
 	- Authentication process with Caronte has been reduced to only one API call and one parameter (email)
 	- Cleaned up API and code: removed PUT methods from /crauth/ and /validate/
-	- Ported CaronteSecurity and CaronteClient to C
+	- Ported CaronteSecurity and CaronteClient libraries to C
+	- Updated client libraries for Java and Python
+	- Added anti reverse brute-force attack prevention
+		Caronte now returns fake tickets when attempt to login with fake account.
+	

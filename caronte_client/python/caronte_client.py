@@ -23,6 +23,7 @@ class CaronteClient:
 		self.pw_iters = None
 		self.header = {}
 		self.valid_users = {}
+		self.ticket = None
 	
 	def login(self, email, password):
 		params = {"email": email};
@@ -30,6 +31,7 @@ class CaronteClient:
 		res = self.conn.getresponse()
 		if res.status == 200:
 			data = json.loads(res.read().decode("UTF-8"))
+			print("Caronte login data:", data)
 			if data["status"] != "OK":
 				return False
 			self.p2, _ = CaronteSecurity.encryptPassword(password, data["IV"], data["pw_iters"]);
@@ -121,6 +123,7 @@ class CaronteClient:
 		return False
 	
 	def revalidateTicket(self):
+		if self.user == None: return False
 		params = {"email": self.user["email"]};
 		self.conn.request("POST", CaronteClient.CR_LOGIN_PATH, body=json.dumps(params))
 		res = self.conn.getresponse()
@@ -134,6 +137,7 @@ class CaronteClient:
 		return False
 	
 	def invalidateTicket(self):
+		if self.ticket == None: return False
 		self.ticket["c"] = 0;
 		return self.validateTicket() # should always return False
 	
@@ -155,7 +159,6 @@ class CaronteClient:
 			msg = json.loads(CaronteSecurity.fromB64(data))
 			return CaronteSecurity.decryptPBE(cipher_data["key"], msg["data"], msg["iv"])
 		except:
-			traceback.print_exc()
 			return None
 	
 	def getOtherKey(self, other_email):
@@ -179,5 +182,4 @@ class CaronteClient:
 				"key_other": None
 			}
 		except:
-			traceback.print_exc()
 			pass

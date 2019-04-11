@@ -41,9 +41,11 @@ BOOL CaronteClient_login(CaronteClient* self, const char* email, const char* pas
 	sprintf(body, params, email);
 	HTTP_Response* res = HTTP_Client_call(self->http, "POST", "/crauth/", body);
 	my_free(body);
+	if (res==NULL) return 0;
 	if (res->status == 200){
 		cJSON* jres = cJSON_Parse(res->body);
 		cJSON* jstatus = cJSON_GetObjectItem(jres, "status");
+		if (jres==NULL || jstatus==NULL) return 0;		
 		int check = strcmp(jstatus->valuestring, "OK");
 		if (check!=0){
 			cJSON_Delete(jres);
@@ -52,16 +54,19 @@ BOOL CaronteClient_login(CaronteClient* self, const char* email, const char* pas
 		}
 
 		cJSON* jIV = cJSON_GetObjectItem(jres, "IV");
-		self->ticket.user_iv = strdup(jIV->valuestring);
-		
+		if (jIV==NULL) return 0;
+		self->ticket.user_iv = String_dup(jIV->valuestring);
 		
 		cJSON* pw_iters = cJSON_GetObjectItem(jres, "pw_iters");
+		if (pw_iters==NULL) return 0;
 		self->pw_iters = pw_iters->valuedouble;
 		
 		cJSON* jticket = cJSON_GetObjectItem(jres, "token");
+		if (jticket==NULL) return 0;
 		char* cipherticket = jticket->valuestring;
 		
 		cJSON* token_iv = cJSON_GetObjectItem(jres, "token_iv");
+		if (token_iv==NULL) return 0;
 		
 		// generate encrypted password used to decrypt token
 		self->p2 = CaronteSecurity_encryptPassword(password, self->ticket.user_iv, self->pw_iters);
@@ -78,21 +83,38 @@ BOOL CaronteClient_login(CaronteClient* self, const char* email, const char* pas
 
 		// build own ticket		
 		cJSON* jtoken = cJSON_GetObjectItem(cticket, "token");
-		self->ticket.t = strdup(jtoken->valuestring);
+		if (jtoken==NULL){
+			cJSON_Delete(jres);
+			cJSON_Delete(cticket);
+			my_free(plainticket);
+			HTTP_Response_destroy(res);
+			return 0;
+		}
+		self->ticket.t = String_dup(jtoken->valuestring);
 		
 		self->ticket.c = 1;
 		
 		cJSON* cname = cJSON_GetObjectItem(cticket, "name");
 		cJSON* cver = cJSON_GetObjectItem(cticket, "version");
+		
+		if (cname==NULL || cver==NULL){
+			cJSON_Delete(jres);
+			cJSON_Delete(cticket);
+			my_free(plainticket);
+			HTTP_Response_destroy(res);
+			return 0;
+		}
+		
 		self->caronte_id = (char*)my_malloc(strlen(cname->valuestring)+strlen(cver->valuestring));
 		strcpy(self->caronte_id, cname->valuestring);
 		strcat(self->caronte_id, " ");
 		strcat(self->caronte_id, cver->valuestring);
+		
 		cJSON_Delete(cticket);
 		cJSON_Delete(jres);
 		my_free(plainticket);
 		HTTP_Response_destroy(res);
-		self->user.email = strdup(email);
+		self->user.email = String_dup(email);
 		self->logged = 1;
 		return 1;
 	}
@@ -146,6 +168,7 @@ BOOL CaronteClient_logout(CaronteClient* self){
 	HTTP_Response* res = HTTP_Client_call(self->http, "DELETE", "/register/", body);
 	my_free(body);
 	my_free(ticket);
+	if (res==NULL) return 0;
 	if (res->status==200){
 		CaronteUser_destroy(&self->user);
 		CaronteTicket_destroy(&self->ticket);
@@ -172,24 +195,28 @@ BOOL CaronteClient_updateUser(CaronteClient* self, const char* name,
 	HTTP_Response* res = HTTP_Client_call(self->http, "PUT", "/register/", body);
 	my_free(body);
 	my_free(extra_data);
-	
+	if (res==NULL) return 0;
 	if (res->status==200){
 		cJSON* jres = cJSON_Parse(res->body);
 		cJSON* status = cJSON_GetObjectItem(jres, "status");
-		if (strcmp(status->valuestring, "OK")==0){
-			if (!String_isEmpty(new_password)){
-				cJSON* new_iv = cJSON_GetObjectItem(jres, "new_iv");
-				my_free(self->p2);
-				self->p2 = CaronteSecurity_encryptPassword(new_password, new_iv->valuestring, self->pw_iters);
-				my_free(self->ticket.user_iv);
-				self->ticket.user_iv = strdup(new_iv->valuestring);
+		if (jres!=NULL && status!=NULL){
+			if (strcmp(status->valuestring, "OK")==0){
+				if (!String_isEmpty(new_password)){
+					cJSON* new_iv = cJSON_GetObjectItem(jres, "new_iv");
+					if (new_iv!=NULL){
+						my_free(self->p2);
+						self->p2 = CaronteSecurity_encryptPassword(new_password, new_iv->valuestring, self->pw_iters);
+						my_free(self->ticket.user_iv);
+						self->ticket.user_iv = String_dup(new_iv->valuestring);
+					}
+				}
+				if (!String_isEmpty(name)){
+					CaronteClient_getUserDetails(self, 1);
+				}
+				cJSON_Delete(jres);
+				HTTP_Response_destroy(res);
+				return 1;
 			}
-			if (!String_isEmpty(name)){
-				CaronteClient_getUserDetails(self, 1);
-			}
-			cJSON_Delete(jres);
-			HTTP_Response_destroy(res);
-			return 1;
 		}
 		cJSON_Delete(jres);
 		HTTP_Response_destroy(res);
@@ -205,27 +232,32 @@ CaronteUser* CaronteClient_getUserDetails(CaronteClient* self, int update){
 	if (self->p2 == NULL || self->ticket.t == NULL) return &(self->user);
 	if (self->user.name == NULL || update){
 		HTTP_Response* res = HTTP_Client_call(self->http, "GET", "/register/", "");
+		if (res==NULL) return &(self->user);
 		if (res->status == 200){
 			cJSON* jres = cJSON_Parse(res->body);
 			cJSON* status = cJSON_GetObjectItem(jres, "status");
 			cJSON* juser = cJSON_GetObjectItem(jres, "user");
 			cJSON* tmp_iv = cJSON_GetObjectItem(jres, "tmp_iv");
-			if (strcmp(status->valuestring, "OK")==0){
-				size_t len;
-				char* userdata = (char*)CaronteSecurity_decryptPBE(self->p2, juser->valuestring,
-					&len, tmp_iv->valuestring);
-				cJSON* user = cJSON_Parse(userdata);
-				cJSON* name = cJSON_GetObjectItem(user, "name");
-				cJSON* email = cJSON_GetObjectItem(user, "email");
-				cJSON* joined = cJSON_GetObjectItem(user, "joined");
-				my_free(self->user.name);
-				my_free(self->user.email);
-				my_free(self->user.joined);
-				self->user.name = strdup(name->valuestring);
-				self->user.email = strdup(email->valuestring);
-				self->user.joined = strdup(joined->valuestring);
-				cJSON_Delete(user);
-				my_free(userdata);
+			if (jres!=NULL && status!=NULL && juser!=NULL && tmp_iv!=NULL){
+				if (strcmp(status->valuestring, "OK")==0){
+					size_t len;
+					char* userdata = (char*)CaronteSecurity_decryptPBE(self->p2, juser->valuestring,
+						&len, tmp_iv->valuestring);
+					cJSON* user = cJSON_Parse(userdata);
+					cJSON* name = cJSON_GetObjectItem(user, "name");
+					cJSON* email = cJSON_GetObjectItem(user, "email");
+					cJSON* joined = cJSON_GetObjectItem(user, "joined");
+					if (user!=NULL && name!=NULL&& email!=NULL && joined!=NULL){
+						my_free(self->user.name);
+						my_free(self->user.email);
+						my_free(self->user.joined);
+						self->user.name = String_dup(name->valuestring);
+						self->user.email = String_dup(email->valuestring);
+						self->user.joined = String_dup(joined->valuestring);
+					}
+					cJSON_Delete(user);
+					my_free(userdata);
+				}
 			}
 			cJSON_Delete(jres);
 		}
@@ -251,6 +283,8 @@ BOOL CaronteClient_validateTicket(CaronteClient* self, const char* other_ticket)
 		sprintf(body, format, ticket);
 	}
 	HTTP_Response* res = HTTP_Client_call(self->http, "POST", "/validate/", body);
+	free(body);
+	if (res==NULL) return 0;
 	if (res->status == 200){
 		cJSON* jres = cJSON_Parse(res->body);
 		cJSON* status = cJSON_GetObjectItem(jres, "status");
@@ -266,10 +300,10 @@ BOOL CaronteClient_validateTicket(CaronteClient* self, const char* other_ticket)
 				HashMap* map = (HashMap*)(self->valid_users);
 				cJSON* oticket = cJSON_Parse(other_ticket);
 				CaronteValidUser* other_user = (CaronteValidUser*)my_malloc(sizeof(CaronteValidUser));
-				other_user->email = strdup(cJSON_GetObjectItem(oticket, "email")->valuestring);
-				other_user->key = strdup(cJSON_GetObjectItem(session_key, "key")->valuestring);
-				other_user->other_key = strdup(cJSON_GetObjectItem(jres, "tmp_key_other")->valuestring);
-				other_user->iv = strdup(tmp_iv->valuestring);
+				other_user->email = String_dup(cJSON_GetObjectItem(oticket, "email")->valuestring);
+				other_user->key = String_dup(cJSON_GetObjectItem(session_key, "key")->valuestring);
+				other_user->other_key = String_dup(cJSON_GetObjectItem(jres, "tmp_key_other")->valuestring);
+				other_user->iv = String_dup(tmp_iv->valuestring);
 				size_t map_key = String_hash(other_user->email);
 				HashMap_Set(map, map_key, (void*)other_user);
 				cJSON_Delete(session_key);
@@ -287,11 +321,14 @@ BOOL CaronteClient_validateTicket(CaronteClient* self, const char* other_ticket)
 }
 
 BOOL CaronteClient_revalidateTicket(CaronteClient* self){
+	if (self->user.email==NULL) return 0;
 	const char* format = "{ \"email\":\"%s\" }";
 	char* body = (char*)my_malloc(strlen(format)+strlen(self->user.email)+1);
 	sprintf(body, format, self->user.email);
 	
 	HTTP_Response* res = HTTP_Client_call(self->http, "POST", "/crauth/", body);
+	free(body);
+	if (res==NULL) return 0;
 	if (res->status == 200){
 		cJSON* jres = cJSON_Parse(res->body);
 		cJSON* status = cJSON_GetObjectItem(jres, "status");
@@ -308,7 +345,7 @@ BOOL CaronteClient_revalidateTicket(CaronteClient* self){
 				return 0;
 			}
 			my_free(self->ticket.t);
-			self->ticket.t = strdup(cJSON_GetObjectItem(signed_token, "token")->valuestring);
+			self->ticket.t = String_dup(cJSON_GetObjectItem(signed_token, "token")->valuestring);
 			self->ticket.c = 1;
 			cJSON_Delete(signed_token);
 			cJSON_Delete(jres);
@@ -393,7 +430,7 @@ void CaronteClient_setOtherKey(CaronteClient* self, const char* other_email, con
 		other_user->other_key = NULL;
 		other_user->iv = NULL;
 		other_user->key = NULL;
-		other_user->email = strdup(other_email);
+		other_user->email = String_dup(other_email);
 		HashMap_Set(self->valid_users, map_key, other_user);
 	}
 	size_t len;
@@ -409,8 +446,8 @@ void CaronteClient_setOtherKey(CaronteClient* self, const char* other_email, con
 	}
 	my_free(other_user->iv);
 	my_free(other_user->key);
-	other_user->iv = strdup(iv->valuestring);
-	other_user->key = strdup(finalkey->valuestring);
+	other_user->iv = String_dup(iv->valuestring);
+	other_user->key = String_dup(finalkey->valuestring);
 	cJSON_Delete(keydata);
 	cJSON_Delete(jplainkey);
 	my_free(plainkey);

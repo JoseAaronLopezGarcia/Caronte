@@ -9,7 +9,7 @@ import json
 import traceback
 
 from .models import User,  Token
-from caronte.settings import CARONTE_ID
+from caronte.settings import CARONTE_ID, CARONTE_VERSION, SECRET_KEY
 from caronte.settings import CARONTE_ALLOW_SAME_PW_RESET
 from caronte.settings import CARONTE_ANTI_BRUTEFORCE_ITERS
 from caronte.settings import CARONTE_ALLOW_REGISTRATION
@@ -41,23 +41,50 @@ class CRAuth(APIView):
 	def post(self, request): # authenticate
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
-			user = User.objects.filter(email=params["email"]).get()
-			if user.login_type != User.LOGIN_ANY and user.login_type != User.LOGIN_CR:
-				log("ERROR: user <%s> login with wrong auth (CR)"%user.email)
-				return invalidData()
-			request.session["user"] = user.id
-			user.status = User.LOGGED_IN
-			Token.generateNew(user)
-			token_iv = security.randB64()
-			res = {
-				"status" : STAT_OK,
-				"IV" : user.IV, # send password IV to user,
-				"pw_iters" : CARONTE_ANTI_BRUTEFORCE_ITERS, # needed for client to calculate derived password
-				# encrypt token with derived user password, user must return unencrypted token to authenticate
-				"token" : user.active_token.createTicketForUser(token_iv),
-				"token_iv" : token_iv
-			}
-			return JsonResponse(res)
+			if "email" not in params: return invalidData()
+			try:
+				user = User.objects.filter(email=params["email"]).get()
+				request.session["user"] = user.id
+				user.status = User.LOGGED_IN
+				Token.generateNew(user)
+				token_iv = security.randB64()
+				res = {
+					"status" : STAT_OK,
+					"IV" : user.IV, # send password IV to user,
+					"pw_iters" : CARONTE_ANTI_BRUTEFORCE_ITERS, # needed for client to calculate derived password
+					# encrypt token with derived user password, user must return unencrypted token to authenticate
+					"token" : user.active_token.createTicketForUser(token_iv),
+					"token_iv" : token_iv
+				}
+				return JsonResponse(res)
+			except:
+				# for security reasons (anti reverse brute-force) we must always act as if user exists
+				# so in case an invalid email is given (possible attack) we return random (invalid) ticket
+				# this will do two things: remove any user information (attacker can't know if a user exists)
+				# and it will also slow down an attacker as it will be force to decipher an incorrect ticket
+				log("ERROR: attempt to login with fake account <%s>, generating fake ticket..."%params["email"])
+				# make a fake user IV, attacker should not be able to verify that the IV is fake
+				# the IV must never change for the same "user" account
+				# we must gurantee that an attacker will get the same fake IV for the same fake account
+				salt = security.generateSalt(params["email"])
+				faked = security.encryptPBE(SECRET_KEY, "FAKE CARONTE IV", salt)
+				fake_iv = security.toB64(security.fromB64(faked)[:16]) # only 16 bytes for fake IV
+				token_iv = security.randB64()
+				fake_token = {
+					"name" : CARONTE_ID,
+					"version" : CARONTE_VERSION,
+					"token" : ""
+				}
+				for i in range(0, 5): fake_token["token"] += security.randB64()
+				res = {
+					"status" : STAT_OK,
+					"IV" : fake_iv,
+					"pw_iters" : CARONTE_ANTI_BRUTEFORCE_ITERS, # needed for client to calculate derived password
+					# encrypt token with derived user password, user must return unencrypted token to authenticate
+					"token" : security.encryptPBE(SECRET_KEY, json.dumps(fake_token), token_iv),
+					"token_iv" : token_iv
+				}
+				return JsonResponse(res)
 		except:
 			traceback.print_exc()
 			return invalidData()
@@ -79,6 +106,8 @@ class Validator(APIView):
 	def post(self, request):
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
+			if "ticket" not in params or params["ticket"] == None:
+				return invalidData()
 			user = User.objects.filter(email=params["ticket"]["email"]).get()
 			if user.id != request.session["user"] or user.active_token == None:
 				log("ERROR: user <%s> verifies with wrong session"%user.email)
@@ -96,8 +125,8 @@ class Validator(APIView):
 				return invalidData()
 			user.active_token.revalidate()
 			user.active_token.save()
-			if "other" in ticket:
-				other = security.decryptPBE(user.getPassword(), ticket["other"], ticket_iv)
+			if "other" in params and params["other"] != None:
+				other = security.decryptPBE(user.getPassword(), params["other"], ticket_iv)
 				o_user = User.objects.filter(email=other["email"]).get()
 				o_ticket = other["creds"]
 				o_ticket_iv = other["iv"]
@@ -177,6 +206,8 @@ class Registration(APIView):
 	def put(self, request): # update existing user
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
+			if "ticket" not in params or params["ticket"] == None:
+				return invalidData()
 			user = User.objects.filter(email=params["ticket"]["email"]).get() # update user information
 			if user.id != request.session["user"] or user.active_token == None:
 				log("ERROR: user <%s> updates with wrong session"%user.email)
@@ -221,6 +252,8 @@ class Registration(APIView):
 	def delete(self, request):
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
+			if "ticket" not in params or params["ticket"] == None:
+				return invalidData()
 			user = User.objects.filter(email=params["ticket"]["email"]).get()
 			if user.id != request.session["user"] or user.active_token == None:
 				log("ERROR: user <%s> logs out with wrong session"%user.email)
@@ -250,6 +283,8 @@ class SampleProvider(APIView):
 
 	def get(self, request):
 		try:
+			if "tmp_key" not in request.session:
+				return invalidData()
 			info = "super secret information not accessible without a login"
 			tmp_iv = security.randB64()
 			cipher = {
@@ -265,6 +300,8 @@ class SampleProvider(APIView):
 	def post(self, request): # login to service provider with ticket
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
+			if "ticket" not in params or params["ticket"] == None:
+				return invalidData()
 			"""
 			if (caronte_client.verifyTicket(ticket)){ // verify user's credentials
 				user_key = caronte_client.getOtherKey(ticket.email);
