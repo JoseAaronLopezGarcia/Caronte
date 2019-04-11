@@ -46,6 +46,10 @@
 	- Cleaned up API and code: removed PUT methods from /crauth/ and /validate/
 	- Ported CaronteSecurity and CaronteClient libraries to C
 	- Updated client libraries for Java and Python
+
+*** 0.9.1
 	- Added anti reverse brute-force attack prevention
 		Caronte now returns fake tickets when attempt to login with fake account.
-	
+	- Improved ticket handling code and verification
+	- Cleaned up code in the API
+	- Added maximum number of tickets that can be issued using the same token

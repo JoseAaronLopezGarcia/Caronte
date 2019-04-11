@@ -31,7 +31,7 @@ ALLOWED_HOSTS = ['*']
 
 # Caronte version used to identify with client
 CARONTE_ID = "Caronte Authentication Server"
-CARONTE_VERSION = "0.9"
+CARONTE_VERSION = "0.9.1"
 
 # File where Caronte issues logs (home by default)
 CARONTE_LOG_FILE = "~/caronte_log.txt"

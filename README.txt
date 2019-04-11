@@ -19,36 +19,35 @@ Features:
 WEB API: All communication done via JSON (HTTP body)
 
 /crauth/ : Challenge-Response authentication
-	GET: invalid
-	POST: initialize handshake
-		client sends email and random IV
-		server responds with user IV and token encrypted with user password and client IV
-	PUT: invalid
-	DELETE: invalid
+	- GET: invalid
+	- POST: initialize handshake
+		* client sends email
+		* server responds with user IV and token encrypted with user password and random IV
+	- PUT: invalid
+	- DELETE: invalid
 
 /validate/ : validate a ticket
-	GET: invalid
-	POST: validate a ticket
-		client sends email and ticket, optionally also another user's ticket to verify third party identity
-		server responds with OK or ERROR message accordingly
+	- GET: invalid
+	- POST: validate a ticket
+		* client own ticket, optionally also another user's ticket to verify third party identity
+		* server responds with OK or ERROR message accordingly
 			if "other" ticket is validated, Caronte generates a temporary key for client-server communication
 			this key is sent twice, one copy encrypted with client password, the other with service provider
 			this allows for client and service provider to have secure symmetric encryption.
 			Caronte does not enfore the use of this temporary key: client and server must do it themselves.
-	PUT: revalidate a ticket
-		client sends email and invalid ticket
-		server responds with new token that client can use to make a new ticket
-	DELETE: invalid
+	- PUT: invalid
+	- DELETE: invalid
 
 /register/ : user related API
-	GET: obtain information about currently logged user (this information is encrypted)
-	POST: register a new user (THIS OPERATION IS EXTREMELY VULNERABLE AND SHOULD NOT BE USED)
-		client sends email, name and password
-		server responds with OK or ERROR message accordingly
-	PUT: update existing user
-		client sends email, new name and new password encrypted in the ticket
-		server responds with OK or ERROR message accordingly
-	DELETE: issue a log out
-		client sends email and ticket
-		server responds with OK or ERROR message accordingly
+	- GET: obtain information about currently logged user (this information is encrypted)
+	- POST: register a new user (THIS OPERATION IS EXTREMELY VULNERABLE AND SHOULD NOT BE USED)
+		* client sends email, name and password
+		* server responds with OK or ERROR message accordingly
+	- PUT: update existing user
+		* client sends email, new name and new password encrypted in the ticket
+		* server responds with OK or ERROR message accordingly
+	- DELETE: issue a log out
+		* client sends email and ticket
+		* server responds with OK or ERROR message accordingly
 
+WARNING: in prodution environment you must change Django's secret key (in caronte.settings)
