@@ -164,12 +164,18 @@ crAuthApp.controller("registerController", function($route, $window, $timeout){
 	ctx.name = "";
 	ctx.email = "";
 	ctx.password = "";
+	ctx.password2 = "";
+	ctx.secret = "";
 	ctx.msg = "";
 	
 	ctx.register = function(){
+		if (ctx.password != ctx.password2){
+			ctx.msg = "Passwords do not match, check again";
+			return;
+		}
 		ctx.msg = "Sending data to server...";
 		$timeout(function (){
-			if (caronte_client.register(ctx.name, ctx.email, ctx.password)){
+			if (caronte_client.register(ctx.name, ctx.email, ctx.password, ctx.secret)){
 				$window.location.href = "#/login";
 				$window.location.reload();
 			}

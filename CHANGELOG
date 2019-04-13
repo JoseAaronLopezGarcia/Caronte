@@ -53,3 +53,8 @@
 	- Improved ticket handling code and verification
 	- Cleaned up code in the API
 	- Added maximum number of tickets that can be issued using the same token
+	- User registration now requires knowing the server key
+		* Only a system admin with access to the server's secret key can register new users
+		* This also means the registration process is now secure as long as the secret key is kept secret
+	- Added protection against Selfie attack by forbiding verification of two tickets issued by the same user
+

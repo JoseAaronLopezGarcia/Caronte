@@ -46,7 +46,7 @@ CARONTE_ALLOW_SAME_PW_RESET = True
 CARONTE_ANTI_BRUTEFORCE_ITERS = 50000
 
 # User registration API should be disabled by default unless using HTTPS
-CARONTE_ALLOW_REGISTRATION = False
+CARONTE_ALLOW_REGISTRATION = True
 
 # We don't want the user to issue an infinite ammount of tickets using the same token
 CARONTE_MAX_TOKEN_COUNT = 10
@@ -57,12 +57,8 @@ CARONTE_MAX_TOKEN_COUNT = 10
 # https://docs.djangoproject.com/en/2.1/ref/settings/#databases
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'postgres',
-        'USER': 'postgres',
-        'PASSWORD': '_Mules0lDB_',
-        'HOST': 'localhost', #'5.196.67.102',
-        'PORT': '5432',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR+'/sqlite3.db',
     }
 }
 

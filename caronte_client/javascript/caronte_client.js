@@ -63,11 +63,13 @@ function CaronteClient(protocol, host, port) {
 			}
 		},
 		
-		register : function(name, email, password){
-			var params = {"name": name, "email": email, "password": password};
+		register : function(name, email, password, secret){
+			var user = {"name": name, "email": email, "password": password};
+			var IV = CaronteSecurity.randB64();
+			var cipher = CaronteSecurity.encryptPBE(secret, JSON.stringify(user), IV);
 			var xhttp = new XMLHttpRequest();
 			xhttp.open("POST", this.REGISTER_URL, false);
-			xhttp.send(JSON.stringify(params));
+			xhttp.send(JSON.stringify({"IV":IV, "user":cipher}));
 			if (xhttp.readyState === 4 && xhttp.status === 200){
 				return JSON.parse(xhttp.responseText)["status"] == "OK";
 			}

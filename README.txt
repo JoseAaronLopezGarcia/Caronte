@@ -9,7 +9,9 @@ Features:
 - Anti bruteforce prevention by using slow password derivation function
 - Symmetric encryption to guarantee confidentiality of data
 - Anti replay attack prevention
-- Clients can issue onee-time tickets for identification
+- Anti reverse brutefore attack
+- Invulnerable to Selfie attack
+- Clients can issue one-time tickets for identification
 - Service Providers can verify client tickets to guarantee identity
 - Tickets can expire, but can be renewed easily and safely
 - Password can be safely updated

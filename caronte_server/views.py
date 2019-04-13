@@ -118,6 +118,10 @@ class Validator(APIView):
 			if "other" in params and params["other"] != None:
 				other = security.decryptPBE(user.getPassword(), params["other"], ticket_iv)
 				o_user = User.objects.filter(email=other["email"]).get()
+				if o_user.id == user.id:
+					# Caronte is already invulnerable to Selfie attack but we want to log if it happens
+					log("ERROR: possible Selfie attack on user <%s>"%user.email)
+					return invalidData()
 				if not o_user.active_token.verifyUserTicket(params, request.session):
 					log("ERROR: user <%s> received wrong ticket from <%s>"%(user.email, o_user.email))
 					return genericError("Other ticket not verified")
@@ -168,15 +172,15 @@ class Registration(APIView):
 			traceback.print_exc()
 			return invalidData()
 	
-	def post(self, request): # Register new user
-		# WARNING!!!! you must secure the registration process (HTTPS) or disable it completely!
+	def post(self, request): # Register new user (requires knowing the server secret key)
 		if not CARONTE_ALLOW_REGISTRATION: return invalidData()
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
 			user = User()
-			user.email = params["email"]
-			user.name = params["name"]
-			user.setPassword(params["password"])
+			user_data = json.loads(security.decryptPBE(SECRET_KEY, params["user"], params["IV"]))
+			user.email = user_data["email"]
+			user.name = user_data["name"]
+			user.setPassword(user_data["password"])
 			user.save()
 			return genericOK("User registration completed")
 		except:
