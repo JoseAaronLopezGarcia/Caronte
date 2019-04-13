@@ -9,7 +9,8 @@ import json
 import traceback
 
 from .models import User,  Token
-from caronte.settings import CARONTE_ID, CARONTE_VERSION, SECRET_KEY
+from caronte.settings import DEBUG, SECRET_KEY
+from caronte.settings import CARONTE_ID, CARONTE_VERSION
 from caronte.settings import CARONTE_ALLOW_SAME_PW_RESET
 from caronte.settings import CARONTE_ANTI_BRUTEFORCE_ITERS
 from caronte.settings import CARONTE_ALLOW_REGISTRATION
@@ -190,8 +191,6 @@ class Registration(APIView):
 	def put(self, request): # update existing user
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
-			if "ticket" not in params or params["ticket"] == None:
-				return invalidData()
 			user = User.objects.filter(email=params["ticket"]["email"]).get() # update user information
 			if user.active_token == None:
 				log("ERROR: user <%s> updates with wrong session"%user.email)
@@ -200,10 +199,10 @@ class Registration(APIView):
 				log("ERROR: user <%s> updates with wrong ticket"%user.email)
 				return invalidData()
 			cipher_ticket = params["ticket"]["creds"]
-			cipher_ticket = params["ticket"]["iv"]
+			ticket_iv = params["ticket"]["iv"]
 			ticket = json.loads(security.decryptPBE(user.getPassword(), cipher_ticket, ticket_iv))
-			if "extra_data" in _ticket:
-				ticket_data = _ticket["extra_data"]
+			if "extra_data" in ticket:
+				ticket_data = ticket["extra_data"]
 				if "name" in ticket_data and len(ticket_data["name"].strip()) > 0:
 					user.name = ticket_data["name"]
 				if "old_pw" in ticket_data and "new_pw" in ticket_data:
@@ -215,7 +214,7 @@ class Registration(APIView):
 						if user.verifyPassword(new_pass) and not CARONTE_ALLOW_SAME_PW_RESET:
 							return invalidData() # disallow user to reset same password
 						user.setPassword(new_pass)
-			user.save()
+				user.save()
 			res = {
 				"status" : STAT_OK,
 				"new_iv" : user.IV
@@ -254,6 +253,7 @@ class Registration(APIView):
 class SampleProvider(APIView):
 
 	def get(self, request):
+		if not DEBUG: return invalidData()
 		try:
 			if "tmp_key" not in request.session:
 				return invalidData()
@@ -270,6 +270,7 @@ class SampleProvider(APIView):
 			return invalidData()
 	
 	def post(self, request): # login to service provider with ticket
+		if not DEBUG: return invalidData()
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
 			if "ticket" not in params or params["ticket"] == None:

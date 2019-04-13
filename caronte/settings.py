@@ -33,8 +33,8 @@ ALLOWED_HOSTS = ['*']
 CARONTE_ID = "Caronte Authentication Server"
 CARONTE_VERSION = "0.9.1"
 
-# File where Caronte issues logs (home by default)
-CARONTE_LOG_FILE = "~/caronte_log.txt"
+# File where Caronte issues logs (project dir by default)
+CARONTE_LOG_FILE = os.path.join(BASE_DIR, "caronte_log.txt")
 
 # Resetting a password using the same password is usually a bad idea
 # However in Caronte it is a valid security measure as it re-encrypts the password using a new IV
@@ -58,7 +58,7 @@ CARONTE_MAX_TOKEN_COUNT = 10
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR+'/sqlite3.db',
+        'NAME': os.path.join(BASE_DIR, 'sqlite3.db'),
     }
 }
 
