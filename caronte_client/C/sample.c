@@ -25,7 +25,7 @@ void CaronteSecurity_test(){
 	
 	printf("IV: %s\n", IV);
 	printf("Random IV: %s\n", CaronteSecurity_randIV());
-	printf("Salt: %s\n", CaronteSecurity_generateSalt(mystr));
+	printf("Salt: %s\n", CaronteSecurity_generateMD5Hash(mystr));
 	printf("P2:\n");
 	printf("%s\n", pyp2);
 	printf("%s\n", p2);
@@ -88,8 +88,9 @@ void HTTP_Client_test(){
 	HTTP_Response_destroy(res);
 }
 
-int loginToProvider(CaronteClient* client){
+int loginToProvider(CaronteClient* client, char** provider_id){
 	int ret = 0;
+	*provider_id = NULL;
 	char* ticket = CaronteClient_getTicket(client, NULL); // get a valid ticket
 	if (ticket != NULL){
 		// login to service provider using Caronte ticket
@@ -106,7 +107,7 @@ int loginToProvider(CaronteClient* client){
 			cJSON* key = cJSON_GetObjectItem(jres, "key");
 			if (strcmp(status->valuestring, "OK")==0){
 				// set temporary session key for safe communication
-				CaronteClient_setOtherKey(client, "my_service_provider", key->valuestring);
+				*provider_id = CaronteClient_setOtherKey(client, key->valuestring);
 				ret = 1;
 			}
 			cJSON_Delete(jres);
@@ -116,7 +117,8 @@ int loginToProvider(CaronteClient* client){
 	return ret;
 }
 
-char* getProviderData(CaronteClient* client){
+char* getProviderData(CaronteClient* client, char* provider_id){
+	if (provider_id==NULL) return NULL;
 	char* secret_data = NULL;
 	HTTP_Response* res = HTTP_Client_call(client->http, "GET", "/provider/", "");
 	if (res==NULL) return NULL;
@@ -127,8 +129,7 @@ char* getProviderData(CaronteClient* client){
 		if (jmsg!=NULL){
 			// decrypt data from service provider
 			size_t len;
-			secret_data = (char*)CaronteClient_decryptOther(client, 
-				"my_service_provider", jmsg->valuestring, &len);
+			secret_data = (char*)CaronteClient_decryptOther(client, provider_id, jmsg->valuestring, &len);
 		}
 		cJSON_Delete(jres);
 		HTTP_Response_destroy(res);
@@ -140,20 +141,26 @@ void CaronteClient_test(){
 	printf("Caronte client test\n");
 	CaronteClient client;
 	CaronteClient_connect(&client, "127.0.0.1", 8000);
+	
 	int login_res = CaronteClient_login(&client, "test@caronte.com", "Caront3Te$t");
 	printf("Login: %d\n", login_res);
+	
 	CaronteUser* user = CaronteClient_getUserDetails(&client, 0);
 	printf("User Name: %s\n", user->name);
 	printf("email: %s\n", user->email);
 	printf("Joined: %s\n", user->joined);
+	
 	printf("Ticket Validates: %d\n", CaronteClient_validateTicket(&client, NULL));
 	printf("Invalidate: %d\n", CaronteClient_invalidateTicket(&client));
 	printf("Validate: %d\n", CaronteClient_validateTicket(&client, NULL));
 	printf("Revalidate: %d\n", CaronteClient_revalidateTicket(&client));
 	printf("Validate: %d\n", CaronteClient_validateTicket(&client, NULL));
-	printf("Login to Provider: %d\n", loginToProvider(&client));
-	char* secret_data = getProviderData(&client);
+	
+	char* provider_id;
+	printf("Login to Provider: %d\n", loginToProvider(&client, &provider_id));
+	char* secret_data = getProviderData(&client, provider_id);
 	if (secret_data!=NULL) printf("Provider Data: %s\n", secret_data);
+	
 	int logout_res = CaronteClient_logout(&client);
 	printf("Logout: %d\n", logout_res);
 }

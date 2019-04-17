@@ -68,9 +68,9 @@ public class CaronteClient {
 		String valid_token = CaronteSecurity.encryptPBE(this.p2, ticket_data.toString(), ticket_iv);
 		this.ticket.put("c", this.ticket.getInt("c")+1);
 		JSONObject ret = new JSONObject();
-		ret.put("email", this.getUserDetails().getString("email"));
+		ret.put("ID", this.ticket.getString("user_iv"));
 		ret.put("iv", ticket_iv);
-		ret.put("creds", valid_token);
+		ret.put("SGT", valid_token);
 		return ret.toString();
 	}
 	
@@ -98,7 +98,7 @@ public class CaronteClient {
 			throws IOException, InvalidKeyException, NoSuchAlgorithmException,
 			NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException{
 		JSONObject params = new JSONObject();
-		params.put("email", email);
+		params.put("email", CaronteSecurity.deriveEmail(email));
 		
 		URL url = new URL(this.CR_LOGIN_URL);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
@@ -129,6 +129,7 @@ public class CaronteClient {
 				this.ticket.put("t", plain_ticket.getString("token"));
 				this.ticket.put("c", 1);
 				this.ticket.put("user_iv", user_iv);
+				this.ticket.put("email", email);
 				this.cookie = con.getHeaderField("Set-Cookie");
 				return true;
 			}
@@ -284,12 +285,11 @@ public class CaronteClient {
 					CaronteSecurity.decryptPBE(this.p2, response.getString("tmp_key"), response.getString("tmp_iv"))
 				);
 				JSONObject valid_user = new JSONObject();
-				JSONObject oticket = new JSONObject(other_ticket);
 				valid_user.put("key", tmp_key.getString("key"));
 				valid_user.put("key_other", response.getString("tmp_key_other"));
 				valid_user.put("iv", response.get("tmp_iv"));
-				valid_user.put("email", oticket.getString("email"));
-				this.valid_users.put(oticket.getString("email"), valid_user);
+				valid_user.put("email", tmp_key.getString("email_B"));
+				this.valid_users.put(tmp_key.getString("ID_B"), valid_user);
 			}
 			return true;
 		}
@@ -300,7 +300,7 @@ public class CaronteClient {
 			NoSuchAlgorithmException, NoSuchPaddingException, InvalidAlgorithmParameterException,
 			IllegalBlockSizeException, BadPaddingException, IOException{
 		JSONObject params = new JSONObject();
-		params.put("email", this.getUserDetails().getString("email"));
+		params.put("email", CaronteSecurity.deriveEmail(this.getUserDetails().getString("email")));
 		
 		URL url = new URL(this.CR_LOGIN_URL);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
@@ -373,6 +373,23 @@ public class CaronteClient {
 			return CaronteSecurity.toB64(keydata.toString());
 		}
 		catch (Exception e){
+		}
+		return null;
+	}
+	
+	public String setOtherKey(String key){
+		try{
+			JSONObject info = new JSONObject(CaronteSecurity.fromB64Str(key));
+			JSONObject tmp_key = new JSONObject(CaronteSecurity.decryptPBE(this.p2, info.getString("key"), info.getString("IV")));
+			JSONObject valid_user = new JSONObject();
+			valid_user.put("key", tmp_key.getString("key"));
+			valid_user.put("iv", info.getString("iv"));
+			valid_user.put("key_other", (String)null);
+			valid_user.put("email", tmp_key.getString("email_A"));
+			valid_users.put(tmp_key.getString("ID_A"), valid_user);
+			return tmp_key.getString("ID_A");
+		}
+		catch(Exception e){
 		}
 		return null;
 	}

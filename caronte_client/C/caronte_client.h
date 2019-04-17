@@ -14,6 +14,7 @@ typedef struct CaronteTicket{
 	char* t;
 	int c;
 	char* user_iv;
+	char* email;
 }CaronteTicket;
 
 typedef struct CaronteValidUser{
@@ -53,7 +54,7 @@ char* CaronteClient_encryptOther(CaronteClient* self, const char* other_email,
 unsigned char* CaronteClient_decryptOther(CaronteClient* self, const char* other_email,
 	const char* data, size_t* len);
 char* CaronteClient_getOtherKey(CaronteClient* self, const char* other_email);
-void CaronteClient_setOtherKey(CaronteClient* self, const char* other_email, const char* key);
+char* CaronteClient_setOtherKey(CaronteClient* self, const char* key);
 void CaronteUser_destroy(CaronteUser* self);
 void CaronteTicket_destroy(CaronteTicket* self);
 

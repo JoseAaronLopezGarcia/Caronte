@@ -14,13 +14,14 @@ from caronte_client.python import caronte_security as security
 class User(models.Model):
 	name = models.CharField(max_length=200, blank=False, null=False)
 	email = models.CharField(max_length=200, blank=False, null=False, unique=True)
+	email_hash = models.CharField(max_length=400, blank=False, null=False, unique=True)
 	password = models.CharField(max_length=500, blank=False, null=False)
 	status = models.IntegerField(null=False, default=0)
 	joined = models.DateTimeField(auto_now_add=True, null=True)
 	failed_attempts = models.IntegerField(null=False, default=0)
 	last_active = models.DateTimeField(auto_now=True)
 	active_token = models.ForeignKey('Token', on_delete=models.SET_NULL, null=True)
-	IV = models.CharField(max_length=500, blank=True, null=True)
+	IV = models.CharField(max_length=500, blank=True, null=True, unique=True)
 	pw_score = models.IntegerField(null=False, default=0)
 	
 	# state of a user account
@@ -28,6 +29,17 @@ class User(models.Model):
 	LOGGED_IN = 1 # user is logged in
 	LOGGED_OUT = 2 # user is not logged in
 	BLOCKED = 3 # user account has been blocked
+	
+	def createNewUser(name, email, password):
+		user = User()
+		user.name = name
+		user.setPassword(password)
+		user.setEmail(email)
+		return user
+	
+	def setEmail(self, email):
+		self.email = email
+		self.email_hash = security.deriveEmail(email)
 	
 	def setPassword(self, password):
 		self.p2, self.IV = security.encryptPassword(password, iter_count=CARONTE_ANTI_BRUTEFORCE_ITERS)
@@ -74,7 +86,7 @@ class Token(models.Model):
 	def generateNew(owner):
 		token = Token()
 		token.owner = owner
-		token.sys_data = security.randB64()+security.generateSalt(str(token.timestamp))
+		token.sys_data = security.randB64()+security.generateMD5Hash(str(token.timestamp))
 		token.user_data, token.IV = security.encryptPassword(token.sys_data)
 		token.ctr = 0
 		token.save()
@@ -96,15 +108,13 @@ class Token(models.Model):
 		return security.encryptPBE(self.owner.getPassword(), data, iv)
 	
 	def verifyUserTicket(self, params, session):
-		ret = False
 		if self._validate(params, session):
 			self.revalidate()
-			ret = True
+			return True
 		else:
 			self.invalidate()
 			session["used_iv"] = dict()
-		self.save()
-		return ret
+			return False
 	
 	def _validate(self, params, session):
 		try:
@@ -115,7 +125,7 @@ class Token(models.Model):
 			if "user" not in session or session["user"] != user.id:
 				log("ERROR: user <%s> verifies with wrong session"%user.email)
 				return False
-			ticket = params["ticket"]["creds"]
+			ticket = params["ticket"]["SGT"]
 			ticket_iv = params["ticket"]["iv"]
 			if ticket_iv == user.IV:
 				log("ERROR: misuse of User IV in communication by <%s>"%user.email)
@@ -131,8 +141,8 @@ class Token(models.Model):
 			if not security.verifyPassword(self.sys_data, user_token["t"], self.IV):
 				log("ERROR: user <%s> provides incorrect token"%user.email)
 				return False
-			if user_token["user_iv"] != self.owner.IV:
-				log("ERROR: user IV in ticket does not match for <%s>"%user.email)
+			if user_token["email"] != self.owner.email:
+				log("ERROR: user email in ticket <%s> does not match for <%s>"%(user_token["email"], user.email))
 				return False
 			if user_token["c"] != self.ctr+1:
 				log("ERROR: pausible replay attack on user <%s>, token count does not match"%self.owner.email)
@@ -146,7 +156,23 @@ class Token(models.Model):
 			return False
 	
 	def invalidate(self):
-		self.valid = False
+		if self.valid:
+			self.valid = False
+			self.save()
 	
 	def revalidate(self):
-		if self.valid: self.ctr += 1
+		if self.valid:
+			self.ctr += 1
+			self.save()
+
+
+
+class Session(models.Model):
+	timestamp = models.DateTimeField(auto_now_add=True, null=False)
+	user_A = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+	user_B = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="other_user")
+	token_A = models.ForeignKey(Token, on_delete=models.SET_NULL, null=True)
+	token_B = models.ForeignKey(Token, on_delete=models.SET_NULL, null=True, related_name="other_token")
+	key_A = models.CharField(max_length=200, blank=False, null=False)
+	key_B = models.CharField(max_length=200, blank=False, null=False)
+	key_iv = models.CharField(max_length=200, blank=False, null=False)

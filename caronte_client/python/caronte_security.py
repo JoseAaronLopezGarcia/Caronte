@@ -28,21 +28,25 @@ def unpad(data):
 	count = ord(data[-1])
 	return data[0 : -count]
 
-# Generate a salt based on the password (MD5 hash)
-def generateSalt(password):
+# Generate MD5 hash
+def generateMD5Hash(data):
 	md5_hash = hashlib.md5()
-	md5_hash.update(password.encode("UTF-8"))
-	salt = base64.b64encode(md5_hash.digest()).decode("UTF-8")
-	return salt
+	md5_hash.update(data.encode("UTF-8"))
+	md5hash = base64.b64encode(md5_hash.digest()).decode("UTF-8")
+	return md5hash
+	
+# Generate SHA-256 hash
+def generateSHA256Hash(data):
+	sha_hash = hashlib.sha256()
+	sha_hash.update(data.encode("UTF-8"))
+	shahash = sha_hash.digest()
+	return shahash
 
 # Generate a 256-bit key out of a password and a derived version of the password
 def derivePassword(password):
-	salt = generateSalt(password)
-	p1 = pad(password+salt)
-	sha_hash = hashlib.sha256()
-	sha_hash.update(p1.encode("UTF-8"))
-	k = sha_hash.digest()
-	return k, p1, salt
+	phash = generateMD5Hash(password)
+	p1 = pad(password+phash)
+	return generateSHA256Hash(p1), p1, phash
 
 def encryptPassword(password, IV=None, iter_count=1):
 	if iter_count < 1: return password, IV
@@ -54,13 +58,16 @@ def encryptPassword(password, IV=None, iter_count=1):
 	# generate key and derived password
 	for i in range(0, iter_count):
 		k, p1, _ = derivePassword(pw)
-		pw = password+generateSalt(p1)
+		pw = password+generateMD5Hash(p1)
 	
 	# Generate second derived password (p2), to be stored in DB
 	cipher = AES.new(k, AES.MODE_CBC, iv)
 	p2 = cipher.encrypt(p1)
 	
 	return base64.b64encode(p2).decode("UTF-8"), base64.b64encode(iv).decode("UTF-8")
+
+def deriveEmail(email):
+	return encryptPassword(email, generateMD5Hash(email), 1)[0]
 
 # Verify that a given password corresponds to a given cipher-password
 def verifyPassword(password, ciphertext, IV, iter_count=1):

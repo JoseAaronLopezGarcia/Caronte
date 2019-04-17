@@ -26,20 +26,18 @@ class CaronteClient:
 		self.ticket = None
 	
 	def login(self, email, password):
-		params = {"email": email};
+		params = {"email": CaronteSecurity.deriveEmail(email)};
 		self.conn.request("POST", CaronteClient.CR_LOGIN_PATH, body=json.dumps(params))
 		res = self.conn.getresponse()
 		if res.status == 200:
 			data = json.loads(res.read().decode("UTF-8"))
-			print("Caronte login data:", data)
 			if data["status"] != "OK":
 				return False
 			self.p2, _ = CaronteSecurity.encryptPassword(password, data["IV"], data["pw_iters"]);
 			try:
 				plain_ticket = json.loads(CaronteSecurity.decryptPBE(self.p2, data["TGT"], data["tgt_iv"]));
 				self.caronte_id = plain_ticket["name"]+" "+plain_ticket["version"];
-				print("Connected to:", self.caronte_id);
-				self.ticket = {"t":plain_ticket["token"], "c":1, "user_iv":data["IV"]};
+				self.ticket = {"t":plain_ticket["token"], "c":1, "user_iv":data["IV"], "email":email};
 				self.header["cookie"] = res.getheader('set-cookie')
 				self.pw_iters = data["pw_iters"]
 				return True;
@@ -55,7 +53,7 @@ class CaronteClient:
 		if (data!=None): ticket_data["extra_data"] = data;
 		valid_token = CaronteSecurity.encryptPBE(self.p2, json.dumps(ticket_data), ticket_iv);
 		self.ticket["c"]+=1;
-		return {"email":self.getUserDetails()["email"], "iv":ticket_iv, "creds":valid_token};
+		return {"ID":self.ticket["user_iv"], "iv":ticket_iv, "SGT":valid_token};
 	
 	def getUserDetails(self, update=False):
 		if (self.p2 == None or self.ticket == None): return None;
@@ -112,17 +110,18 @@ class CaronteClient:
 			if (data["status"] == "OK"):
 				if (other_ticket!=None):
 					tmp_key = json.loads(CaronteSecurity.decryptPBE(self.p2, data["tmp_key"], data["tmp_iv"]))
-					self.valid_users[other_ticket["email"]] = {
+					self.valid_users[tmp_key["ID_B"]] = {
 						"key":tmp_key["key"],
 						"key_other":data["tmp_key_other"],
-						"iv":data["tmp_iv"]
+						"iv":data["tmp_iv"],
+						"email":tmp_key["email_B"]
 					}
 				return True
 		return False
 	
 	def revalidateTicket(self):
 		if self.user == None: return False
-		params = {"email": self.user["email"]};
+		params = {"email": CaronteSecurity.deriveEmail(self.user["email"])};
 		self.conn.request("POST", CaronteClient.CR_LOGIN_PATH, body=json.dumps(params))
 		res = self.conn.getresponse()
 		if (res.status == 200):
@@ -170,14 +169,16 @@ class CaronteClient:
 		except:
 			return None
 	
-	def setOtherKey(self, other_email, key):
+	def setOtherKey(self, key):
 		try:
 			info = json.loads(CaronteSecurity.fromB64(key))
 			tmp_key = json.loads(CaronteSecurity.decryptPBE(self.p2, info["key"], info["iv"]))
-			self.valid_users[other_email] = {
+			self.valid_users[tmp_key["ID_A"]] = {
 				"key": tmp_key["key"],
 				"iv": info["iv"],
-				"key_other": None
+				"key_other": None,
+				"email":tmp_key["email_A"]
 			}
+			return tmp_key["ID_A"]
 		except:
 			pass

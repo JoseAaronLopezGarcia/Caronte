@@ -75,7 +75,7 @@ public class CaronteSecurity {
 		return new String(res);
 	}
 	
-	public static String generateSalt(String password) throws NoSuchAlgorithmException{
+	public static String generateMD5Hash(String password) throws NoSuchAlgorithmException{
 		MessageDigest md = MessageDigest.getInstance("MD5");
 		md.update(password.getBytes());
 		byte[] digest = md.digest();
@@ -83,7 +83,7 @@ public class CaronteSecurity {
 	}
 	
 	public static Map<String, Object> derivePassword(String password) throws NoSuchAlgorithmException{
-		String salt = generateSalt(password);
+		String salt = generateMD5Hash(password);
 		String p1 = pad(password+salt);
 		MessageDigest md = MessageDigest.getInstance("SHA-256");
 		byte[] k = md.digest(p1.getBytes());
@@ -108,7 +108,7 @@ public class CaronteSecurity {
 			Map<String, Object> derived = derivePassword(pw);
 			k = (byte[])derived.get("key");
 			p1 = (String)derived.get("p1");
-			pw = password + CaronteSecurity.generateSalt(p1);
+			pw = password + CaronteSecurity.generateMD5Hash(p1);
 		}
 		
 		Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
@@ -117,6 +117,12 @@ public class CaronteSecurity {
 		cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivspec);
 		
 		return Base64.getEncoder().encodeToString(cipher.doFinal(p1.getBytes("UTF-8")));
+	}
+	
+	public static String deriveEmail(String email)
+			throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
+			IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException, InvalidAlgorithmParameterException{
+		return CaronteSecurity.encryptPassword(email, CaronteSecurity.generateMD5Hash(email), 1);
 	}
 	
 	public static boolean verifyPassword(String password, String ciphertext, String IV, int pw_iters)

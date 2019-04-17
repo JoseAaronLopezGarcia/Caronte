@@ -1,6 +1,6 @@
 var PROTOCOL = "http";
-var HOST = window.location.hostname; //"5.196.67.102";
-var PORT = window.location.port; //"8008";
+var HOST = window.location.hostname;
+var PORT = window.location.port;
 var PROVIDER_URL = PROTOCOL+"://"+HOST+":"+PORT+"/provider/";
 
 var caronte_client = CaronteClient(PROTOCOL, HOST, PORT);
@@ -119,7 +119,7 @@ crAuthApp.controller("crAuthController", function($route, $window, $timeout){
 					var res = JSON.parse(xhttp.responseText);
 					if (res["status"] == "OK"){
 						// set temporary session key for safe communication
-						caronte_client.setOtherKey("my_service_provider", res["key"]);
+						var my_service_provider = caronte_client.setOtherKey(res["key"]);
 						
 						// request data to service provider
 						var xhttp = new XMLHttpRequest();
@@ -128,7 +128,7 @@ crAuthApp.controller("crAuthController", function($route, $window, $timeout){
 						if (xhttp.readyState === 4 && xhttp.status === 200){
 							var res = JSON.parse(xhttp.responseText);
 							// decrypt data from service provider
-							ctx.data = caronte_client.decryptOther("my_service_provider", res["msg"]);
+							ctx.data = caronte_client.decryptOther(my_service_provider, res["msg"]);
 						}
 					}
 				}

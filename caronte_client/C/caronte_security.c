@@ -79,7 +79,7 @@ unsigned char* CaronteSecurity_unpad(const unsigned char* data, size_t len, size
 
 	
 
-char* CaronteSecurity_generateSalt(const char* password){
+char* CaronteSecurity_generateMD5Hash(const char* password){
 	unsigned char result[MD5_DIGEST_LENGTH];
 	MD5((const unsigned char*)password, strlen(password), result);
 	return CaronteSecurity_toB64Bytes(result, MD5_DIGEST_LENGTH);
@@ -87,7 +87,7 @@ char* CaronteSecurity_generateSalt(const char* password){
 
 DerivedPassword* CaronteSecurity_derivePassword(const char* password){
 	DerivedPassword* res = (DerivedPassword*)my_malloc(sizeof(DerivedPassword));
-	res->salt = CaronteSecurity_generateSalt(password);
+	res->salt = CaronteSecurity_generateMD5Hash(password);
 	char* tmp = (char*)my_malloc(strlen(password)+strlen(res->salt)+1);
 	strcpy(tmp, password);
 	strcat(tmp, res->salt);
@@ -103,7 +103,7 @@ char* CaronteSecurity_encryptPassword(const char* password, const char* IV, size
 	for (int i=0; i<iters; i++){
 		derived = CaronteSecurity_derivePassword(pw);
 		if (i<iters-1){
-			char* new_salt = CaronteSecurity_generateSalt((char*)derived->p1);
+			char* new_salt = CaronteSecurity_generateMD5Hash((char*)derived->p1);
 			char* new_pw = (char*)my_malloc(strlen(password)+strlen(new_salt));
 			strcpy(new_pw, password);
 			strcat(new_pw, new_salt);
@@ -129,6 +129,13 @@ char* CaronteSecurity_encryptPassword(const char* password, const char* IV, size
 	DerivedPassword_destroy(derived);
 	EVP_CIPHER_CTX_free(ctx);
 	return res;
+}
+
+char* CaronteSecurity_deriveEmail(const char* email){
+	char* md5hash = CaronteSecurity_generateMD5Hash(email);
+	char* derived = CaronteSecurity_encryptPassword(email, (const char*)md5hash, 1);
+	my_free(md5hash);
+	return derived;
 }
 
 int CaronteSecurity_verifyPassword(const char* password, const char* ciphertext, const char* IV, size_t iters){

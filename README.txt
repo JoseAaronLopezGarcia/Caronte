@@ -24,7 +24,10 @@ WEB API: All communication done via JSON (HTTP body)
 	- GET: invalid
 	- POST: initialize handshake
 		* client sends email
-		* server responds with user IV and token encrypted with user password and random IV
+		* server responds with data for client to reconstruct the derived user key and a TGT (token encrypted with derived user key)
+		* client decrypts the TGT, retrieves the token and constructs the SGT that can be used as credentials for other servers
+		* if the client email doesn't exist, Caronte will generate a fake TGT virtually identical to a real one
+		* this meassure is to prevent an attacker from figuring out user emails
 	- PUT: invalid
 	- DELETE: invalid
 
@@ -36,20 +39,22 @@ WEB API: All communication done via JSON (HTTP body)
 			if "other" ticket is validated, Caronte generates a temporary key for client-server communication
 			this key is sent twice, one copy encrypted with client password, the other with service provider
 			this allows for client and service provider to have secure symmetric encryption.
-			Caronte does not enfore the use of this temporary key: client and server must do it themselves.
+			Caronte does not enforce the use of this temporary key: client and server must do it themselves.
 	- PUT: invalid
 	- DELETE: invalid
 
 /register/ : user related API
 	- GET: obtain information about currently logged user (this information is encrypted)
-	- POST: register a new user (THIS OPERATION IS EXTREMELY VULNERABLE AND SHOULD NOT BE USED)
-		* client sends email, name and password
+	- POST: register a new user (THIS OPERATION IS EXTREMELY VULNERABLE AND SHOULD NOT BE CHANGED)
+		* client sends email, name and password encrypted using Caronte's master key
 		* server responds with OK or ERROR message accordingly
+		* this operation requires knowing the server master key; only system admins can actually do this
+		* it is recommended that a different registration method is used/coded
 	- PUT: update existing user
-		* client sends email, new name and new password encrypted in the ticket
+		* client sends email, new name and new password encrypted within the SGT
 		* server responds with OK or ERROR message accordingly
 	- DELETE: issue a log out
-		* client sends email and ticket
+		* client sends email and SGT
 		* server responds with OK or ERROR message accordingly
 
-WARNING: in prodution environment you must change Django's secret key (in caronte.settings)
+WARNING: in prodution environment you must change Caronte's secret key (in caronte.settings)

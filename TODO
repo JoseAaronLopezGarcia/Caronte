@@ -1,6 +1,6 @@
 TODO List in order of importance
 
-- Update java and python libraries
+- Figure out a way to identify who made a ticket without asking for the user's email
 - Integrate client libraries into Yuneta server
 - Integrate client libraries into Yuneta client
 - Do the first tests with Yuneta server, Yuneta client and Caronte

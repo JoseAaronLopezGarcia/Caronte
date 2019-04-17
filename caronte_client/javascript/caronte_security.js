@@ -29,14 +29,14 @@ var CaronteSecurity = {
 		return res;
 	},
 	
-	generateSalt : function (password){
+	generateMD5Hash : function (password){
 		var md5_hash = CryptoJS.MD5(password);
 		var salt = md5_hash.toString(CryptoJS.enc.Base64);
 		return salt;
 	},
 	
 	derivePassword : function(password){
-		var salt = this.generateSalt(password);
+		var salt = this.generateMD5Hash(password);
 		var p1 = this.pad(password+salt);
 		var k = CryptoJS.SHA256(p1);
 		return {"key": k, "p1": p1, "salt": salt};
@@ -50,11 +50,15 @@ var CaronteSecurity = {
 			var derived = this.derivePassword(pw)
 			k = derived["key"];
 			p1 = derived["p1"];
-			pw = password + CaronteSecurity.generateSalt(p1);
+			pw = password + CaronteSecurity.generateMD5Hash(p1);
 		}
 		IV = CaronteSecurity.fromB64(IV);
 		var p2 = CryptoJS.AES.encrypt(p1, k, {iv: IV, padding: CryptoJS.pad.NoPadding});
 		return CaronteSecurity.toB64(p2.ciphertext);
+	},
+	
+	deriveEmail : function(email){
+		return CaronteSecurity.encryptPassword(email, CaronteSecurity.generateMD5Hash(email), 1)
 	},
 	
 	verifyPassword : function (password, ciphertext, IV, iters){

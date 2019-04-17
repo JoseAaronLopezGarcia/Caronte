@@ -31,7 +31,7 @@ ALLOWED_HOSTS = ['*']
 
 # Caronte version used to identify with client
 CARONTE_ID = "Caronte Authentication Server"
-CARONTE_VERSION = "0.9.1"
+CARONTE_VERSION = "0.9.2"
 
 # File where Caronte issues logs (project dir by default)
 CARONTE_LOG_FILE = os.path.join(BASE_DIR, "caronte_log.txt")

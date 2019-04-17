@@ -8,7 +8,7 @@ import base64
 import json
 import traceback
 
-from .models import User,  Token
+from .models import User, Token, Session
 from caronte.settings import DEBUG, SECRET_KEY
 from caronte.settings import CARONTE_ID, CARONTE_VERSION
 from caronte.settings import CARONTE_ALLOW_SAME_PW_RESET
@@ -43,10 +43,14 @@ class CRAuth(APIView):
 		params = None
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
-			if "email" not in params: return invalidData()
 		except: return invalidData()
 		try:
-			user = User.objects.filter(email=params["email"]).get()
+			if "email" in params:
+				user = User.objects.filter(email_hash=params["email"]).get()
+			#elif "user_iv" in params:
+			#	user = User.objects.filter(IV=params["user_iv"]).get()
+			else:
+				return invalidData()
 			request.session["user"] = user.id
 			user.status = User.LOGGED_IN
 			Token.generateNew(user)
@@ -70,8 +74,8 @@ class CRAuth(APIView):
 			# the IV must never change for the same "user" account
 			# we must gurantee that an attacker will get the same fake IV for the same fake account
 			# an attacket must also not be able to calculate the IV from the fake email
-			salt = security.generateSalt(params["email"])
-			faked = security.encryptPBE(SECRET_KEY, params["email"], salt)
+			email_hash = security.generateMD5Hash(params["email"])
+			faked = security.encryptPBE(SECRET_KEY, params["email"], email_hash)
 			fake_iv = security.toB64(security.fromB64(faked)[:16]) # only 16 bytes for fake IV
 			token_iv = security.randB64()
 			fake_token = {
@@ -109,7 +113,7 @@ class Validator(APIView):
 			params = json.loads(request.body.decode("UTF-8"))
 			if "ticket" not in params or params["ticket"] == None:
 				return invalidData()
-			user = User.objects.filter(email=params["ticket"]["email"]).get()
+			user = User.objects.filter(IV=params["ticket"]["ID"]).get()
 			if user.active_token == None:
 				log("ERROR: user <%s> verifies with wrong session"%user.email)
 				return invalidData()
@@ -117,8 +121,8 @@ class Validator(APIView):
 				log("ERROR: user <%s> verifies with wrong ticket"%user.email)
 				return invalidData()
 			if "other" in params and params["other"] != None:
-				other = security.decryptPBE(user.getPassword(), params["other"], ticket_iv)
-				o_user = User.objects.filter(email=other["email"]).get()
+				other = json.loads(security.decryptPBE(user.getPassword(), params["other"], ticket_iv))
+				o_user = User.objects.filter(IV=other["ID"]).get()
 				if o_user.id == user.id:
 					# Caronte is already invulnerable to Selfie attack but we want to log if it happens
 					log("ERROR: possible Selfie attack on user <%s>"%user.email)
@@ -126,7 +130,7 @@ class Validator(APIView):
 				if not o_user.active_token.verifyUserTicket(params, request.session):
 					log("ERROR: user <%s> received wrong ticket from <%s>"%(user.email, o_user.email))
 					return genericError("Other ticket not verified")
-				tmp_key = json.dumps({"ID": CARONTE_ID, "key":security.randB64(32)}) # 256-bit key
+				tmp_key = json.dumps({"ID": CARONTE_ID, "key":security.randB64(128), "email_A":user.email, "email_B":o_user.email, "ID_A":user.IV, "ID_B":o_user.IV})
 				tmp_iv = security.randB64()
 				res = {
 					"status" : STAT_OK,
@@ -135,6 +139,15 @@ class Validator(APIView):
 					"tmp_key_other" : security.encryptPBE(o_user.getPassword(), tmp_key, tmp_iv),
 					"tmp_iv" : tmp_iv
 				}
+				user_session = Session()
+				user_session.user_A = user
+				user_session.user_B = o_user
+				user_session.token_A = user.active_token
+				user_session.token_B = o_user.active_token
+				user_session.key_A = res["tmp_key"]
+				user_session.key_B = res["tmp_key_other"]
+				user_session.key_iv = tmp_iv
+				user_session.save()
 				return JsonResponse(res)
 			return genericOK("Ticket verified")
 		except:
@@ -177,21 +190,22 @@ class Registration(APIView):
 		if not CARONTE_ALLOW_REGISTRATION: return invalidData()
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
-			user = User()
+			#user = User()
 			user_data = json.loads(security.decryptPBE(SECRET_KEY, params["user"], params["IV"]))
-			user.email = user_data["email"]
-			user.name = user_data["name"]
-			user.setPassword(user_data["password"])
+			#user.email = user_data["email"]
+			#user.name = user_data["name"]
+			#user.setPassword(user_data["password"])
+			user = User.createNewUser(user_data["name"], user_data["email"], user_data["password"])
 			user.save()
-			return genericOK("User registration completed")
 		except:
 			traceback.print_exc()
-			return invalidData()
+		finally:
+			return genericOK("User registration completed")
 	
 	def put(self, request): # update existing user
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
-			user = User.objects.filter(email=params["ticket"]["email"]).get() # update user information
+			user = User.objects.filter(IV=params["ticket"]["ID"]).get() # update user information
 			if user.active_token == None:
 				log("ERROR: user <%s> updates with wrong session"%user.email)
 				return invalidData()
@@ -230,7 +244,7 @@ class Registration(APIView):
 			params = json.loads(request.body.decode("UTF-8"))
 			if "ticket" not in params or params["ticket"] == None:
 				return invalidData()
-			user = User.objects.filter(email=params["ticket"]["email"]).get()
+			user = User.objects.filter(IV=params["ticket"]["ID"]).get()
 			if user.active_token == None:
 				log("ERROR: user <%s> logs out with wrong session"%user.email)
 				return invalidData()
@@ -282,15 +296,16 @@ class SampleProvider(APIView):
 			}
 			"""
 			# here we emulate sending the ticket to Caronte for validation
-			user = User.objects.filter(email=params["ticket"]["email"]).get();
+			user = User.objects.filter(IV=params["ticket"]["ID"]).get();
 			if user.active_token == None:
 				return invalidData()
 			if not user.active_token.verifyUserTicket(params, request.session):
 				log("ERROR: user <%s> logs in to SampleProvider with wrong ticket"%user.email)
 				return invalidData()
 			# here we simulate caronte returning a session key
-			rand_key = security.randB64(32) # 256-bit key
-			tmp_key = tmp_key = json.dumps({"ID": CARONTE_ID, "key":rand_key})
+			SP_EMAIL = "sample.provider@caronte.com"
+			rand_key = security.randB64(128)
+			tmp_key = tmp_key = json.dumps({"ID": CARONTE_ID, "key":rand_key, "email_A":SP_EMAIL, "email_B":user.email, "ID_A":security.randB64(), "ID_B":user.IV})
 			tmp_iv = security.randB64()
 			other_key = security.encryptPBE(user.getPassword(), tmp_key, tmp_iv)
 			final_key = base64.b64encode(json.dumps({"key":other_key, "iv":tmp_iv}).encode("ascii"))

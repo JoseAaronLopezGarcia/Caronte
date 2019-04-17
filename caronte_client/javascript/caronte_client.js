@@ -16,7 +16,7 @@ function CaronteClient(protocol, host, port) {
 		valid_users : null,
 		
 		login : function(email, password){
-			var params = {"email": email};
+			var params = {"email": CaronteSecurity.deriveEmail(email)};
 			var xhttp = new XMLHttpRequest();
 			xhttp.open("POST", this.CR_LOGIN_URL, false);
 			xhttp.send(JSON.stringify(params));
@@ -34,7 +34,7 @@ function CaronteClient(protocol, host, port) {
 					var token = plain_ticket["token"];
 					this.caronte_id = plain_ticket["name"]+" "+plain_ticket["version"];
 					console.log("Connected to: "+this.caronte_id);
-					this.ticket = {"t":token, "c":1, "user_iv":data["IV"]};
+					this.ticket = {"t":token, "c":1, "user_iv":data["IV"], "email":email};
 					return true;
 				}
 				catch (err){ // usually means incorrect password
@@ -130,7 +130,7 @@ function CaronteClient(protocol, host, port) {
 			if (data!=null) ticket_data["extra_data"] = data;
 			var valid_token = CaronteSecurity.encryptPBE(this.p2, JSON.stringify(ticket_data), ticket_iv);
 			this.ticket["c"]++;
-			return {"email":this.getUserDetails().email, "iv":ticket_iv, "creds":valid_token};
+			return {"ID":this.ticket.user_iv, "iv":ticket_iv, "SGT":valid_token};
 		},
 		
 		validateTicket : function(other_ticket=null){
@@ -140,7 +140,7 @@ function CaronteClient(protocol, host, port) {
 			var params = {"ticket":this.getTicket()};
 			if (other_ticket != null)
 				params["other"] = CaronteSecurity.encryptPBE(this.p2, other_ticket, params["ticket"]["iv"]);
-			console.log(params["ticket"]["creds"]);
+			console.log("SGT: "+params["ticket"]["SGT"]);
 			var xhttp = new XMLHttpRequest();
 			xhttp.open("POST", this.VALIDATE_URL, false);
 			xhttp.send(JSON.stringify(params));
@@ -152,10 +152,11 @@ function CaronteClient(protocol, host, port) {
 							CaronteSecurity.decryptPBE(this.p2, res["tmp_key"], res["tmp_iv"])
 						);
 						console.log("Got temp key from: "+tmp_key["ID"]);
-						this.valid_users[other_ticket["email"]] = {
+						this.valid_users[tmp_key["ID_B"]] = {
 							"key":tmp_key["key"],
 							"key_other":res["tmp_key_other"],
-							"iv":res["tmp_iv"]
+							"iv":res["tmp_iv"],
+							"email":tmp_key["email_B"]
 						};
 					}
 					return true;
@@ -165,7 +166,7 @@ function CaronteClient(protocol, host, port) {
 		},
 		
 		revalidateTicket : function(){
-			var params = {"email": this.user.email};
+			var params = {"email": CaronteSecurity.deriveEmail(this.user.email)};
 			var xhttp = new XMLHttpRequest();
 			xhttp.open("POST", this.CR_LOGIN_URL, false);
 			xhttp.send(JSON.stringify(params));
@@ -174,7 +175,7 @@ function CaronteClient(protocol, host, port) {
 				console.log(res);
 				if (res["status"] == "OK"){
 					// create new ticket
-					var plain_ticket = JSON.parse(CaronteSecurity.decryptPBE(this.p2, res["token"], res["token_iv"]));
+					var plain_ticket = JSON.parse(CaronteSecurity.decryptPBE(this.p2, res["TGT"], res["tgt_iv"]));
 					console.log(plain_ticket);
 					this.ticket["t"] = plain_ticket["token"];
 					this.ticket["c"] = 1;
@@ -232,23 +233,26 @@ function CaronteClient(protocol, host, port) {
 			}
 		},
 		
-		setOtherKey : function(other_email, key){
+		setOtherKey : function(key){
 			try{
 				var info = JSON.parse(CryptoJS.enc.Utf8.stringify(CaronteSecurity.fromB64(key)));
 				var tmp_key = JSON.parse(
 					CaronteSecurity.decryptPBE(this.p2, info["key"], info["iv"])
 				);
 				console.log("Got temp key from: "+tmp_key["ID"]);
-				console.log(info);
-				this.valid_users[other_email] = {
+				console.log("Established session key for: "+tmp_key["email_A"]);
+				this.valid_users[tmp_key["ID_A"]] = {
 					"key": tmp_key["key"],
 					"iv": info["iv"],
-					"key_other": null
+					"key_other": null,
+					"email":tmp_key["email_A"]
 				};
+				return tmp_key["ID_A"];
 			}
 			catch(err){
 				console.log("error setting key");
 				console.log(err.stack);
+				return null;
 			}
 		}
 	};
