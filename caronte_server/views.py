@@ -162,6 +162,9 @@ class Validator(APIView):
 				return genericOK("Ticket verified")
 			elif "other" in params and params["other"] != None:
 				user = User.objects.filter(IV=params["ID"]).get()
+				if not user.isLoggedIn():
+					log("ERROR: user <%s> attempts to verify other user while not logged in"%user.email)
+					return invalidData()
 				other = json.loads(security.decryptPBE(user.getPassword(), params["other"], params["ticket_iv"]))
 				o_user = User.objects.filter(IV=other["ID"]).get()
 				if o_user.id == user.id:

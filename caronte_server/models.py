@@ -60,6 +60,9 @@ class User(models.Model):
 	def verifyPassword(self, password):
 		return security.verifyPassword(password, self.getPassword(), self.IV, CARONTE_ANTI_BRUTEFORCE_ITERS)
 		
+	def isLoggedIn(self):
+		return self.active_token != None and self.active_token.active and self.active_token.ctr > 0
+		
 	def toDict(self): # serialize
 		return {
 			"name" : self.name,
