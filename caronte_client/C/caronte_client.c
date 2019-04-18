@@ -167,7 +167,7 @@ BOOL CaronteClient_logout(CaronteClient* self){
 	char* body = (char*)my_malloc(body_len);
 	sprintf(body, format, ticket);
 	
-	HTTP_Response* res = HTTP_Client_call(self->http, "DELETE", "/register/", body);
+	HTTP_Response* res = HTTP_Client_call(self->http, "DELETE", "/crauth/", body);
 	my_free(body);
 	my_free(ticket);
 	if (res==NULL) return 0;
@@ -233,7 +233,13 @@ BOOL CaronteClient_updateUser(CaronteClient* self, const char* name,
 CaronteUser* CaronteClient_getUserDetails(CaronteClient* self, int update){
 	if (self->p2 == NULL || self->ticket.t == NULL) return &(self->user);
 	if (self->user.name == NULL || update){
-		HTTP_Response* res = HTTP_Client_call(self->http, "GET", "/register/", "");
+		const char* format = "{ \"ticket\":%s }";
+		char* ticket = CaronteClient_getTicket(self, NULL);
+		char* body = (char*)my_malloc(strlen(format)+strlen(ticket)+1);
+		sprintf(body, format, ticket);
+		HTTP_Response* res = HTTP_Client_call(self->http, "PUT", "/crauth/", body);
+		my_free(ticket);
+		my_free(body);
 		if (res==NULL) return &(self->user);
 		if (res->status == 200){
 			cJSON* jres = cJSON_Parse(res->body);
@@ -272,15 +278,20 @@ BOOL CaronteClient_validateTicket(CaronteClient* self, const char* other_ticket)
 	if (self->ticket.t == NULL){
 		return 0;
 	}
-	char* ticket = CaronteClient_getTicket(self, NULL);
 	char* body = NULL;
 	if (other_ticket != NULL){
-		const char* format = "{ \"ticket\":%s, \"other\":%s }";
-		body = (char*)my_malloc(strlen(format)+strlen(ticket)+strlen(other_ticket)+1);
-		sprintf(body, format, ticket, other_ticket);
+		const char* format = "{ \"ID\":\"%s\", \"ticket_iv\":\"%s\", \"other\":\"%s\" }";
+		char* ticket_iv = CaronteSecurity_randIV();
+		char* other = CaronteSecurity_encryptPBE(self->p2, (const unsigned char*)other_ticket, strlen(other_ticket), ticket_iv);
+		char* user_iv = self->ticket.user_iv;
+		body = (char*)my_malloc(strlen(format)+strlen(ticket_iv)+strlen(other)+strlen(user_iv)+1);
+		sprintf(body, format, user_iv, ticket_iv, other);
+		my_free(other);
+		my_free(ticket_iv);
 	}
 	else{
 		const char* format = "{ \"ticket\":%s }";
+		char* ticket = CaronteClient_getTicket(self, NULL);
 		body = (char*)my_malloc(strlen(format)+strlen(ticket)+1);
 		sprintf(body, format, ticket);
 	}

@@ -7,6 +7,7 @@ from caronte.settings import CARONTE_ID
 from caronte.settings import CARONTE_VERSION
 from caronte.settings import CARONTE_ANTI_BRUTEFORCE_ITERS
 from caronte.settings import CARONTE_MAX_TOKEN_COUNT
+from caronte.settings import CARONTE_USE_SESSION
 from caronte.common import log
 
 from caronte_client.python import caronte_security as security
@@ -120,9 +121,9 @@ class Token(models.Model):
 		try:
 			user = self.owner
 			if not self.valid:
-				log("ERROR: user <%s> attempts to validate invalidated ticket"%user.email)
+				log("ERROR: user <%s> attempts to validate invalidated token"%user.email)
 				return False
-			if "user" not in session or session["user"] != user.id:
+			if CARONTE_USE_SESSION and ("user" not in session or session["user"] != user.id):
 				log("ERROR: user <%s> verifies with wrong session"%user.email)
 				return False
 			ticket = params["ticket"]["SGT"]
@@ -130,13 +131,14 @@ class Token(models.Model):
 			if ticket_iv == user.IV:
 				log("ERROR: misuse of User IV in communication by <%s>"%user.email)
 				return False
-			if "used_iv" not in session: session["used_iv"] = dict()
-			if ticket_iv in session["used_iv"]:
-				log("ERROR: reuse of IV in communication by <%s>"%user.email)
-				return False
-			used_iv = dict(session["used_iv"])
-			used_iv[ticket_iv] = True
-			session["used_iv"] = used_iv
+			if CARONTE_USE_SESSION:
+				if "used_iv" not in session: session["used_iv"] = dict()
+				if ticket_iv in session["used_iv"]:
+					log("ERROR: reuse of IV in communication by <%s>"%user.email)
+					return False
+				used_iv = dict(session["used_iv"])
+				used_iv[ticket_iv] = True
+				session["used_iv"] = used_iv
 			user_token = json.loads(security.decryptPBE(user.getPassword(), ticket, ticket_iv))
 			if not security.verifyPassword(self.sys_data, user_token["t"], self.IV):
 				log("ERROR: user <%s> provides incorrect token"%user.email)
@@ -145,7 +147,7 @@ class Token(models.Model):
 				log("ERROR: user email in ticket <%s> does not match for <%s>"%(user_token["email"], user.email))
 				return False
 			if user_token["c"] != self.ctr+1:
-				log("ERROR: pausible replay attack on user <%s>, token count does not match"%self.owner.email)
+				log("ERROR: pausible replay attack on user <%s>, token count does not match, expected %d, got %d"%(self.owner.email, self.ctr+1, user_token["c"]))
 				return False
 			if self.ctr >= CARONTE_MAX_TOKEN_COUNT:
 				log("ERROR: user <%s> has exceed maximum allowed tickets for token"%user.email)

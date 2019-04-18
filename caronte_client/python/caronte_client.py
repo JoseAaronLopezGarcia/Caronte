@@ -58,7 +58,8 @@ class CaronteClient:
 	def getUserDetails(self, update=False):
 		if (self.p2 == None or self.ticket == None): return None;
 		if (self.user == None or update):
-			self.conn.request("GET", CaronteClient.REGISTER_PATH, headers=self.header)
+			params = {"ticket":self.getTicket()}
+			self.conn.request("PUT", CaronteClient.CR_LOGIN_PATH, headers=self.header, body=json.dumps(params))
 			res = self.conn.getresponse()
 			if (res.status == 200):
 				data = json.loads(res.read().decode("UTF-8"))
@@ -68,7 +69,7 @@ class CaronteClient:
 	
 	def logout(self):
 		params = {"ticket": self.getTicket()}
-		self.conn.request("DELETE", CaronteClient.REGISTER_PATH, headers=self.header, body=json.dumps(params))
+		self.conn.request("DELETE", CaronteClient.CR_LOGIN_PATH, headers=self.header, body=json.dumps(params))
 		res = self.conn.getresponse()
 		if res.status == 200:
 			self.ticket = None;
@@ -100,9 +101,16 @@ class CaronteClient:
 	def validateTicket(self, other_ticket=None):
 		if (self.getUserDetails() == None or self.ticket == None):
 			return False
-		params = {"ticket":self.getTicket()}
-		if (other_ticket != None):
-			params["other"] = CaronteSecurity.encryptPBE(self.p2, other_ticket, params["ticket"]["iv"]);
+		params = None
+		if other_ticket != None:
+			ticket_iv = CaronteSecurity.randB64()
+			params = {
+				"ID":self.ticket["user_iv"],
+				"ticket_iv":ticket_iv,
+				"other":CaronteSecurity.encryptPBE(self.p2, other_ticket, ticket_iv)
+			}
+		else:
+			params = {"ticket":self.getTicket()}
 		self.conn.request("POST", CaronteClient.VALIDATE_PATH, headers=self.header, body=json.dumps(params))
 		res = self.conn.getresponse()
 		if (res.status == 200):

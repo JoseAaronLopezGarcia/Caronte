@@ -145,7 +145,7 @@ public class CaronteClient {
 			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException{
 		JSONObject params = new JSONObject();
 		params.put("ticket", new JSONObject(this.getTicket()));
-		URL url = new URL(this.REGISTER_URL);
+		URL url = new URL(this.CR_LOGIN_URL);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		con.addRequestProperty("Cookie", this.cookie);
 		con.setRequestMethod("DELETE");
@@ -172,12 +172,18 @@ public class CaronteClient {
 			NoSuchAlgorithmException, NoSuchPaddingException, InvalidAlgorithmParameterException,
 			IllegalBlockSizeException, BadPaddingException, JSONException{
 		if (this.user == null || update){
-			URL url = new URL(this.REGISTER_URL);
+			URL url = new URL(this.CR_LOGIN_URL);
 			HttpURLConnection con = (HttpURLConnection) url.openConnection();
 			con.addRequestProperty("Cookie", this.cookie);
-			con.setRequestMethod("GET");
+			con.setRequestMethod("PUT");
 			con.setDoInput(true);
-			con.setDoOutput(false);
+			con.setDoOutput(true);
+			
+			JSONObject params = new JSONObject();
+			params.put("ticket", new JSONObject(this.getTicket()));
+			OutputStream os = con.getOutputStream();
+			os.write(params.toString().getBytes("UTF-8"));
+			os.close();
 			
 			//con.connect();
 			InputStream is = con.getInputStream();
@@ -255,10 +261,15 @@ public class CaronteClient {
 			return false;
 		}
 		JSONObject params = new JSONObject();
-		params.put("ticket", new JSONObject(this.getTicket()));
-		if (other_ticket != null)
-			params.put("other", CaronteSecurity.encryptPBE(this.p2, other_ticket, params.getJSONObject("ticket").getString("iv")));
-
+		if (other_ticket != null){
+			String ticket_iv = CaronteSecurity.randIV();
+			params.put("ID", this.ticket.getString("user_iv"));
+			params.put("ticket_iv", ticket_iv);
+			params.put("other", CaronteSecurity.encryptPBE(this.p2, other_ticket, ticket_iv));
+		}
+		else{
+			params.put("ticket", new JSONObject(this.getTicket()));
+		}
 		URL url = new URL(this.VALIDATE_URL);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		con.addRequestProperty("Cookie", this.cookie);

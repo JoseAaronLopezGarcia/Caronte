@@ -94,11 +94,51 @@ class CRAuth(APIView):
 			}
 			return JsonResponse(res)
 	
+	# obtain information about currently logged user
 	def put(self, request):
-		return invalidData()
+		try:
+			params = json.loads(request.body.decode("UTF-8"))
+			user = User.objects.filter(IV=params["ticket"]["ID"]).get()
+			if user.active_token == None:
+				log("ERROR: user <%s> verifies with wrong session"%user.email)
+				return invalidData()
+			if not user.active_token.verifyUserTicket(params, request.session):
+				log("ERROR: user <%s> verifies with wrong ticket"%user.email)
+				return invalidData()
+			tmp_iv = security.randB64()
+			res = {
+				"status":STAT_OK,
+				"tmp_iv":tmp_iv,
+				"user":security.encryptPBE(user.getPassword(), json.dumps(user.toDict()), tmp_iv)
+			}
+			return JsonResponse(res)
+		except:
+			traceback.print_exc()
+			return invalidData()
 
+	# Issue a log-out.
 	def delete(self, request):
-		return invalidData()
+		try:
+			params = json.loads(request.body.decode("UTF-8"))
+			if "ticket" not in params or params["ticket"] == None:
+				return invalidData()
+			user = User.objects.filter(IV=params["ticket"]["ID"]).get()
+			if user.active_token == None:
+				log("ERROR: user <%s> logs out with wrong session"%user.email)
+				return invalidData()
+			if not user.active_token.verifyUserTicket(params, request.session):
+				log("ERROR: user <%s> logs out with wrong ticket"%user.email)
+			else:
+				user.active_token.invalidate()
+				user.active_token.save()
+			user.status = User.LOGGED_OUT
+			user.active_token = None
+			user.save()
+			request.session["user"] = None
+			return genericOK("User logged out")
+		except:
+			traceback.print_exc()
+			return invalidData()
 
 
 
@@ -111,17 +151,18 @@ class Validator(APIView):
 	def post(self, request):
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
-			if "ticket" not in params or params["ticket"] == None:
-				return invalidData()
-			user = User.objects.filter(IV=params["ticket"]["ID"]).get()
-			if user.active_token == None:
-				log("ERROR: user <%s> verifies with wrong session"%user.email)
-				return invalidData()
-			if not user.active_token.verifyUserTicket(params, request.session):
-				log("ERROR: user <%s> verifies with wrong ticket"%user.email)
-				return invalidData()
-			if "other" in params and params["other"] != None:
-				other = json.loads(security.decryptPBE(user.getPassword(), params["other"], ticket_iv))
+			if "ticket" in params and params["ticket"] != None:
+				user = User.objects.filter(IV=params["ticket"]["ID"]).get()
+				if user.active_token == None:
+					log("ERROR: user <%s> verifies with wrong session"%user.email)
+					return invalidData()
+				if not user.active_token.verifyUserTicket(params, request.session):
+					log("ERROR: user <%s> verifies with wrong ticket"%user.email)
+					return invalidData()
+				return genericOK("Ticket verified")
+			elif "other" in params and params["other"] != None:
+				user = User.objects.filter(IV=params["ID"]).get()
+				other = json.loads(security.decryptPBE(user.getPassword(), params["other"], params["ticket_iv"]))
 				o_user = User.objects.filter(IV=other["ID"]).get()
 				if o_user.id == user.id:
 					# Caronte is already invulnerable to Selfie attack but we want to log if it happens
@@ -149,7 +190,8 @@ class Validator(APIView):
 				user_session.key_iv = tmp_iv
 				user_session.save()
 				return JsonResponse(res)
-			return genericOK("Ticket verified")
+			else:
+				return invalidData()
 		except:
 			traceback.print_exc()
 			return invalidData()
@@ -165,26 +207,8 @@ class Validator(APIView):
 # User registration API
 class Registration(APIView):
 
-	# obtain information about currently logged user
 	def get(self, request):
-		if "user" not in request.session or request.session["user"] == None:
-			log("ERROR: attempt to obtain user information while not being logged in")
-			return invalidData()
-		try:
-			user = User.objects.filter(id=request.session["user"]).get()
-			if user.status != User.LOGGED_IN or user.active_token == None:
-				request.session["user"] =  None
-				return invalidData()
-			tmp_iv = security.randB64()
-			res = {
-				"status":STAT_OK,
-				"tmp_iv":tmp_iv,
-				"user":security.encryptPBE(user.getPassword(), json.dumps(user.toDict()), tmp_iv)
-			}
-			return JsonResponse(res)
-		except:
-			traceback.print_exc()
-			return invalidData()
+		return invalidData()
 	
 	def post(self, request): # Register new user (requires knowing the server secret key)
 		if not CARONTE_ALLOW_REGISTRATION: return invalidData()
@@ -238,29 +262,8 @@ class Registration(APIView):
 			traceback.print_exc()
 			return invalidData()
 	
-	# Issue a log-out.
 	def delete(self, request):
-		try:
-			params = json.loads(request.body.decode("UTF-8"))
-			if "ticket" not in params or params["ticket"] == None:
-				return invalidData()
-			user = User.objects.filter(IV=params["ticket"]["ID"]).get()
-			if user.active_token == None:
-				log("ERROR: user <%s> logs out with wrong session"%user.email)
-				return invalidData()
-			if not user.active_token.verifyUserTicket(params, request.session):
-				log("ERROR: user <%s> logs out with wrong ticket"%user.email)
-			else:
-				user.active_token.invalidate()
-				user.active_token.save()
-			user.status = User.LOGGED_OUT
-			user.active_token = None
-			user.save()
-			request.session["user"] = None
-			return genericOK("User logged out")
-		except:
-			traceback.print_exc()
-			return invalidData()
+		return invalidData()
 
 
 

@@ -50,7 +50,7 @@ function CaronteClient(protocol, host, port) {
 		logout : function(){
 			var params = {"ticket":this.getTicket()};
 			var xhttp = new XMLHttpRequest();
-			xhttp.open("DELETE", this.REGISTER_URL, false);
+			xhttp.open("DELETE", this.CR_LOGIN_URL, false);
 			xhttp.send(JSON.stringify(params));
 			if (xhttp.readyState === 4 && xhttp.status === 200){
 				this.ticket = null;
@@ -84,7 +84,6 @@ function CaronteClient(protocol, host, port) {
 			};
 			var xhttp = new XMLHttpRequest();
 			xhttp.open("PUT", this.REGISTER_URL, false);
-			console.log(JSON.stringify(params));
 			xhttp.send(JSON.stringify(params));
 			if (xhttp.readyState === 4 && xhttp.status === 200){
 				var res = JSON.parse(xhttp.responseText);
@@ -108,9 +107,10 @@ function CaronteClient(protocol, host, port) {
 		getUserDetails : function(update=false){
 			if (this.p2 == null || this.ticket == null) return null;
 			if (this.user == null || update){
+				var params = {"ticket":this.getTicket()};
 				var xhttp = new XMLHttpRequest();
-				xhttp.open("GET", this.REGISTER_URL, false);
-				xhttp.send();
+				xhttp.open("PUT", this.CR_LOGIN_URL, false);
+				xhttp.send(JSON.stringify(params));
 				if (xhttp.readyState === 4 && xhttp.status === 200){
 					var res = JSON.parse(xhttp.responseText)
 					if (res.status == "OK"){
@@ -137,10 +137,19 @@ function CaronteClient(protocol, host, port) {
 			if (this.getUserDetails() == null || this.ticket == null){
 				return false;
 			}
-			var params = {"ticket":this.getTicket()};
-			if (other_ticket != null)
-				params["other"] = CaronteSecurity.encryptPBE(this.p2, other_ticket, params["ticket"]["iv"]);
-			console.log("SGT: "+params["ticket"]["SGT"]);
+			var params = null;
+			if (other_ticket != null){
+				var ticket_iv = CaronteSecurity.randB64();
+				params = {
+					"ID":this.ticket.user_iv,
+					"ticket_iv":ticket_iv,
+					"other":CaronteSecurity.encryptPBE(this.p2, other_ticket, ticket_iv)
+				};
+			}
+			else{
+				params = {"ticket":this.getTicket()};
+				console.log("SGT: "+params["ticket"]["SGT"]);
+			}
 			var xhttp = new XMLHttpRequest();
 			xhttp.open("POST", this.VALIDATE_URL, false);
 			xhttp.send(JSON.stringify(params));

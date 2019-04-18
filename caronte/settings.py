@@ -51,6 +51,9 @@ CARONTE_ALLOW_REGISTRATION = True
 # We don't want the user to issue an infinite ammount of tickets using the same token
 CARONTE_MAX_TOKEN_COUNT = 10
 
+# Caronte will no longer work with HTTP sessions
+CARONTE_USE_SESSION = False
+
 ############### DJANGO CONFIGURATION #######################
 
 # Database
