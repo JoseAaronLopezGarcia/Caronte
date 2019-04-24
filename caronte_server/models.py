@@ -32,11 +32,16 @@ class User(models.Model):
 	BLOCKED = 3 # user account has been blocked
 	
 	def createNewUser(name, email, password):
-		user = User()
-		user.name = name
-		user.setPassword(password)
-		user.setEmail(email)
-		return user
+		name = name.strip()
+		email = email.strip()
+		password = password.strip()
+		if len(name)>0 and len(email)>0 and len(password)>0:
+			user = User()
+			user.name = name
+			user.setPassword(password)
+			user.setEmail(email)
+			return user
+		return None
 	
 	def setEmail(self, email):
 		self.email = email

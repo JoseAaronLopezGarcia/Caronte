@@ -20,10 +20,10 @@ This means Caronte has to validate the identity of both parties and safely provi
 * A - Client
 * B - Service Provider
 * C - Caronte (Authentication Server)
-A <-> C // ticket(A)
-B <-> C // ticket(B)
-A -> B // ticket(A)
-B -> C // ticket(B) + ticket(A)
+A <-> C // TGT(A) -> SGT(A)
+B <-> C // TGT(B) -> SGT(B)
+A -> B // SGT(A) -> KGT(B, A)
+B -> C // KGT(B, A) -> session key
 B <- C // cipher(key, pw_B) + cipher(key, pw_A)
 B // decipher(key, pw_B) -> session key
 A <- B // cipher(key, pw_A)
@@ -44,9 +44,11 @@ David: malicious attacker
 BASIS OF AUTHENTICATION
 
 Alice)                 Bob)						Caronte)
-<-----------------------------------------------> handshake
-                         <----------------------> handshake
---------------------> ticket -------------------> ticket(B) + ticket(A)
+------------------------------------------------> hash(email_A)
+<------------------------------------------------ TGT(A)
+                         -----------------------> hash(email_B)
+                         <----------------------- TGT(B)
+--------------------> SGT(A) -------------------> KGT(B, A)
 						<------------------------ ok
 <------------------------ ok
 
@@ -56,11 +58,13 @@ Alice)                 Bob)						Caronte)
 MAN IN THE MIDDLE ATTACK!
 
 Alice)     David)      Bob)						Caronte)
-<------------<>-----------------------------------> Handshake
-                         <------------------------> Handshake
-------------->----------->-----------------------> ticket(B) + ticket(A)
+------------->----------------------------------> hash(email_A)
+<------------<----------------------------------- TGT(A)
+                         -----------------------> hash(email_B)
+                         <----------------------- TGT(B)
+------------->------> SGT(A) -------------------> KGT(B, A)
              David acts as a relay point between Alice and Bob during authentication
-             all it has to do is re-transmit tickets created by Alice to Bob without any modification
+             All it has to do is re-transmit tickets created by Alice to Bob without any modification
 						<------------------------ ok
              <----------- ok
             David consumes the resources from Bob that were meant for Alice and denies it to Alice
@@ -77,13 +81,15 @@ Since Caronte knows both passwords for Alice and Bob, each copy is encrypted for
 Thus only Alice and Bob can decrypt the secret key and safely use it for encrypted communication.
 
 A)			D)			B)						  C)
-<------------<>-----------------------------------> Handshake
-                         <------------------------> Handshake
------------->-------> ticket ---------------------> ticket = ticket(B) + ticket(A)
+------------->----------------------------------> hash(email_A)
+<------------<----------------------------------- TGT(A)
+                         -----------------------> hash(email_B)
+                         <----------------------- TGT(B)
+------------->------> SGT(A) -------------------> KGT(B, A)
                                                    Caronte generates a random secret key and IV
 <-----------<------------<------------------------ temp_iv + encrypt(secret_key, pw_B) + encrypt(secret_key, pw_A)
-						decrypt(temp_pw, pw_B): Bob knows the temp key
-decrypt(temp_pw, pw_A): Alice knows the temp key
+						decrypt(secret_key, pw_B): Bob knows the shared secret key
+decrypt(secret_key, pw_A): Alice knows the shared secret key
             David can't decrypt the secret key without knowing Alice or Bob's password
 <-----------x----------> communication between Alice and Bob is encrypted using temp key
-            David can't read or write the data between Alice and Bob as the tempt key is not known
+            David can't read or write the data between Alice and Bob as the shared key is not known

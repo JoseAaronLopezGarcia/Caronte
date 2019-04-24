@@ -13,9 +13,9 @@ crAuthApp.config(function($routeProvider, $locationProvider){
 	$locationProvider.hashPrefix('');
 	$routeProvider.when('/',
 		{
-			controller: "crAuthController",
+			controller: "startupController",
 			controllerAs: "ctx",
-			templateUrl: "pages/main.html",
+			templateUrl: "pages/none.html",
 			resolve: {
 				delay: function($q, $timeout) {
 					var delay = $q.defer();
@@ -23,6 +23,13 @@ crAuthApp.config(function($routeProvider, $locationProvider){
 					return delay.promise;
 				}
 			}
+		}
+	)
+	.when('/main',
+		{
+			controller: "crAuthController",
+			controllerAs: "ctx",
+			templateUrl: "pages/main.html"
 		}
 	)
 	.when('/login',
@@ -48,63 +55,80 @@ crAuthApp.config(['$httpProvider', function($httpProvider) {
 	$httpProvider.defaults.withCredentials = true;
 }]);
 
+crAuthApp.controller("startupController", function($route, $window, $timeout){
+	var ctx = this;
+	if (caronte_client.isLoggedIn()){
+		caronte_client.getUserDetails(function(user){
+			$window.location.href = "#/main";
+		});
+	}
+	else{
+		$window.location.href = "#/login";
+	}
+});
+
 // controller for main page
 crAuthApp.controller("crAuthController", function($route, $window, $timeout){
+
+	if (!caronte_client.isLoggedIn()){
+		$window.location.href = "#/login";
+		return;
+	}
+
 	var ctx = this;
-	ctx.user = caronte_client.getUserDetails();
-	ctx.ticket = caronte_client.validateTicket();
+	ctx.user = caronte_client.user;
+	ctx.ticket = "";
 	ctx.old_pass = "";
 	ctx.new_pass = "";
-	ctx.name = "";
+	ctx.name = ctx.user.name;
 	ctx.msg = "";
 	ctx.data = null;
 	ctx.caronte_id = caronte_client.caronte_id;
 	
-	if (ctx.user == null || caronte_client.ticket == null){
-		$window.location.href = "#/login";
-		$window.location.reload();
-	}
-	else{
-		ctx.name = ctx.user.name;
-	}
-	
 	ctx.logout = function(){
-		$timeout(function (){
-			caronte_client.logout();
+		var onLogout = function(){
 			$window.location.href = "#/";
 			$window.location.reload();
-		});
+		}
+		caronte_client.logout(onLogout, onLogout);
 	};
 	
 	ctx.updateUser = function(){
 		ctx.msg = "Updating...";
 		$timeout(function (){
-			caronte_client.updateUser(ctx.name, ctx.old_pass, ctx.new_pass);
-			ctx.user = caronte_client.getUserDetails();
-			ctx.password = "";
-			ctx.msg = "Update done";
+			caronte_client.updateUser(ctx.name, ctx.old_pass, ctx.new_pass,
+				function(){
+					caronte_client.getUserDetails(function(user){ctx.user=user;});
+					ctx.password = "";
+					ctx.msg = "Update done";
+				},
+				function(){ ctx.msg = "Unable to update user details"; }
+			);
 		});
 	};
 	
 	ctx.validateTicket = function(){
 		ctx.ticket = "";
-		$timeout(function (){
-			ctx.ticket = caronte_client.validateTicket();
-		});
+		caronte_client.validateTicket(
+			function(){ ctx.ticket = "Success!"; },
+			function(){ ctx.ticket = "Error"; }
+		);
 	};
 	
 	ctx.revalidateTicket = function(){
 		ctx.ticket = "";
-		$timeout(function (){
-			ctx.ticket = caronte_client.revalidateTicket();
-		});
+		caronte_client.revalidateTicket(
+			function(){ ctx.ticket = "Success!"; },
+			function(){ ctx.ticket = "Error"; }
+		);
 	};
 	
 	ctx.invalidateTicket = function(){
 		ctx.ticket = "";
-		$timeout(function (){
-			ctx.ticket = caronte_client.invalidateTicket();
-		});
+		caronte_client.invalidateTicket(
+			function(){ ctx.ticket = "Success!"; },
+			function(){ ctx.ticket = "Error"; }
+		);
 	};
 	
 	ctx.connectServiceProvider = function(){
@@ -136,10 +160,18 @@ crAuthApp.controller("crAuthController", function($route, $window, $timeout){
 		});
 	};
 	
+	ctx.validateTicket();
+	
+	/*
+	caronte_client.getUserDetails(function(user){
+		ctx.user=user;
+	});
+	*/
+	
 });
 
 // controller for login page
-crAuthApp.controller("loginController", function($route, $window, $timeout){
+crAuthApp.controller("loginController", function($route, $window, $timeout, $location, $scope){
 	var ctx = this;
 	ctx.email = "";
 	ctx.password = "";
@@ -147,14 +179,10 @@ crAuthApp.controller("loginController", function($route, $window, $timeout){
 	
 	ctx.login = function(){
 		ctx.msg = "Authenticating with server...";
-		$timeout(function(){
-			if(caronte_client.login(ctx.email, ctx.password)){
-				$window.location.href = "#/";
-			}
-			else{
-				ctx.msg = "Unable to login, check email and password";
-			}
-		});
+		caronte_client.login(ctx.email, ctx.password,
+			function(){ $window.location.href = "#/"; },
+			function(){ ctx.msg = "Unable to login, check email and password"; }
+		);
 	};
 });
 
@@ -174,14 +202,9 @@ crAuthApp.controller("registerController", function($route, $window, $timeout){
 			return;
 		}
 		ctx.msg = "Sending data to server...";
-		$timeout(function (){
-			if (caronte_client.register(ctx.name, ctx.email, ctx.password, ctx.secret)){
-				$window.location.href = "#/login";
-				$window.location.reload();
-			}
-			else{
-				ctx.msg = "Unable to register, user already exists? Try login";
-			}
-		});
+		caronte_client.register(ctx.name, ctx.email, ctx.password, ctx.secret,
+			function(){ $window.location.href = "#/login"; },
+			function(){ ctx.msg = "Unable to register, user already exists? Try login"; }
+		);
 	};
 });
