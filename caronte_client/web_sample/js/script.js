@@ -95,39 +95,55 @@ crAuthApp.controller("crAuthController", function($route, $window, $timeout){
 	
 	ctx.updateUser = function(){
 		ctx.msg = "Updating...";
-		$timeout(function (){
-			caronte_client.updateUser(ctx.name, ctx.old_pass, ctx.new_pass,
-				function(){
-					caronte_client.getUserDetails(function(user){ctx.user=user;});
+		caronte_client.updateUser(ctx.name, ctx.old_pass, ctx.new_pass,
+			function(){
+				caronte_client.getUserDetails(function(user){
+					$timeout(function (){ctx.user=user;});
+				});
+				$timeout(function (){
 					ctx.password = "";
 					ctx.msg = "Update done";
-				},
-				function(){ ctx.msg = "Unable to update user details"; }
-			);
-		});
+				});
+			},
+			function(){
+				$timeout(function (){ctx.msg = "Unable to update user details";});
+			}
+		);
 	};
 	
 	ctx.validateTicket = function(){
 		ctx.ticket = "";
 		caronte_client.validateTicket(
-			function(){ ctx.ticket = "Success!"; },
-			function(){ ctx.ticket = "Error"; }
+			function(){
+				$timeout(function(){ctx.ticket = "Success!";});
+			},
+			function(){
+				$timeout(function(){ctx.ticket = "Error";});
+			}
 		);
 	};
 	
 	ctx.revalidateTicket = function(){
 		ctx.ticket = "";
 		caronte_client.revalidateTicket(
-			function(){ ctx.ticket = "Success!"; },
-			function(){ ctx.ticket = "Error"; }
+			function(){
+				$timeout(function(){ctx.ticket = "Success!";});
+			},
+			function(){
+				$timeout(function(){ctx.ticket = "Error";});
+			}
 		);
 	};
 	
 	ctx.invalidateTicket = function(){
 		ctx.ticket = "";
 		caronte_client.invalidateTicket(
-			function(){ ctx.ticket = "Success!"; },
-			function(){ ctx.ticket = "Error"; }
+			function(){
+				$timeout(function(){ctx.ticket = "Success!";});
+			},
+			function(){
+				$timeout(function(){ctx.ticket = "Error";});
+			}
 		);
 	};
 	

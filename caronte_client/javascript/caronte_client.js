@@ -166,7 +166,8 @@ function CaronteClient(protocol, host, port) {
 		validateTicket : function(onOk, onErr, other_ticket=null){
 			var ctx = this;
 			if (ctx.ticket == null){
-				return false;
+				onErr();
+				return;
 			}
 			var params = null;
 			if (other_ticket != null){
