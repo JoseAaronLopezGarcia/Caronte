@@ -1,5 +1,8 @@
 from http.client import HTTPConnection
 import json, traceback
+import os, sys
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import caronte_security as CaronteSecurity
 
@@ -40,7 +43,7 @@ class CaronteClient:
 				self.ticket = {"t":plain_ticket["token"], "c":1, "user_iv":data["IV"], "email":email};
 				self.header["cookie"] = res.getheader('set-cookie')
 				self.pw_iters = data["pw_iters"]
-				return True;
+				return self.getUserDetails(True)!=None;
 			except:
 				return False
 		else:
@@ -103,6 +106,7 @@ class CaronteClient:
 			return False
 		params = None
 		if other_ticket != None:
+			if type(other_ticket) != type(""): other_ticket = json.dumps(other_ticket)
 			ticket_iv = CaronteSecurity.randB64()
 			params = {
 				"ID":self.ticket["user_iv"],

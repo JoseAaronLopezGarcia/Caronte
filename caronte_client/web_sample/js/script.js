@@ -148,41 +148,38 @@ crAuthApp.controller("crAuthController", function($route, $window, $timeout){
 	};
 	
 	ctx.connectServiceProvider = function(){
-		$timeout(function (){
-			var ticket = caronte_client.getTicket(); // get a valid ticket
-			if (ticket != null){
-				// login
-				var xhttp = new XMLHttpRequest();
-				xhttp.open("POST", PROVIDER_URL, false);
-				xhttp.send(JSON.stringify({"ticket":ticket})); // send ticket to authenticate
+		var ticket = caronte_client.getTicket(); // get a valid ticket
+		if (ticket != null){
+			// login
+			var xhttp = new XMLHttpRequest();
+			xhttp.onreadystatechange = function(){
 				if (xhttp.readyState === 4 && xhttp.status === 200){
 					var res = JSON.parse(xhttp.responseText);
 					if (res["status"] == "OK"){
 						// set temporary session key for safe communication
 						var my_service_provider = caronte_client.setOtherKey(res["key"]);
-						
 						// request data to service provider
-						var xhttp = new XMLHttpRequest();
-						xhttp.open("GET", PROVIDER_URL, false);
-						xhttp.send();
-						if (xhttp.readyState === 4 && xhttp.status === 200){
-							var res = JSON.parse(xhttp.responseText);
-							// decrypt data from service provider
-							ctx.data = caronte_client.decryptOther(my_service_provider, res["msg"]);
+						var xhttp2 = new XMLHttpRequest();
+						xhttp2.onreadystatechange = function(){
+							if (xhttp2.readyState === 4 && xhttp2.status === 200){
+								var res = JSON.parse(xhttp2.responseText);
+								// decrypt data from service provider
+								$timeout(function (){
+									ctx.data = caronte_client.decryptOther(my_service_provider, res["msg"]);
+								});
+							}
 						}
+						xhttp2.open("GET", PROVIDER_URL, true);
+						xhttp2.send();
 					}
 				}
 			}
-		});
+			xhttp.open("POST", PROVIDER_URL, true);
+			xhttp.send(JSON.stringify({"ticket":ticket})); // send ticket to authenticate
+		}
 	};
 	
 	ctx.validateTicket();
-	
-	/*
-	caronte_client.getUserDetails(function(user){
-		ctx.user=user;
-	});
-	*/
 	
 });
 

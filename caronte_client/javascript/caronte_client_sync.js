@@ -35,7 +35,7 @@ function CaronteClient(protocol, host, port) {
 					this.caronte_id = plain_ticket["name"]+" "+plain_ticket["version"];
 					console.log("Connected to: "+this.caronte_id);
 					this.ticket = {"t":token, "c":1, "user_iv":data["IV"], "email":email};
-					return true;
+					return this.getUserDetails(true)!=null;
 				}
 				catch (err){ // usually means incorrect password
 					console.log("Could not decrypt token");

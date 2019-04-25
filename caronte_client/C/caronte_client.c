@@ -116,9 +116,9 @@ BOOL CaronteClient_login(CaronteClient* self, const char* email, const char* pas
 		cJSON_Delete(jres);
 		my_free(plainticket);
 		HTTP_Response_destroy(res);
-		//self->user.email = String_dup(email);
 		self->logged = 1;
-		return 1;
+		CaronteClient_getUserDetails(self, 1);
+		return self->user.name != NULL;
 	}
 	else{
 		HTTP_Response_destroy(res);

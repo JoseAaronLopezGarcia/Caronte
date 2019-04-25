@@ -4,19 +4,22 @@ from rest_framework.views import APIView
 from django.http import JsonResponse
 
 import os
+import sys
 import base64
 import json
 import traceback
 
 from .models import User, Token, Session
-from caronte.settings import DEBUG, SECRET_KEY
+from caronte.settings import DEBUG, SECRET_KEY, BASE_DIR
 from caronte.settings import CARONTE_ID, CARONTE_VERSION
 from caronte.settings import CARONTE_ALLOW_SAME_PW_RESET
 from caronte.settings import CARONTE_ANTI_BRUTEFORCE_ITERS
 from caronte.settings import CARONTE_ALLOW_REGISTRATION
 from caronte.common import log
 
+#sys.path.append(os.path.join(os.path.join(BASE_DIR, "caronte_client"), "python"))
 from caronte_client.python import caronte_security as security
+from caronte_client.python import caronte_client as client
 
 # generic stuff
 LOGGED_IN_MSG = "User logged in successfully"
@@ -37,6 +40,14 @@ def invalidData():
 class CRAuth(APIView):
 
 	def get(self, request):
+		# Uncomment these to create sample users for test environment
+		"""
+		provider = User.createNewUser("Caronte Tester", "test@caronte.com", "Caront3Te$t")
+		provider.save()
+		tester = User.createNewUser("Samle Provider", "sample.provider@caronte.com", "Sampl3Pr0videR")
+		tester.save()
+		return genericOK("Sample users created")
+		"""
 		return invalidData()
 
 	def post(self, request): # authenticate
@@ -102,7 +113,7 @@ class CRAuth(APIView):
 			if user.active_token == None:
 				log("ERROR: user <%s> verifies with wrong session"%user.email)
 				return invalidData()
-			if not user.active_token.verifyUserTicket(params, request.session):
+			if not user.active_token.verifyUserTicket(params):
 				log("ERROR: user <%s> verifies with wrong ticket"%user.email)
 				return invalidData()
 			tmp_iv = security.randB64()
@@ -126,11 +137,10 @@ class CRAuth(APIView):
 			if user.active_token == None:
 				log("ERROR: user <%s> logs out with wrong session"%user.email)
 				return invalidData()
-			if not user.active_token.verifyUserTicket(params, request.session):
+			if not user.active_token.verifyUserTicket(params):
 				log("ERROR: user <%s> logs out with wrong ticket"%user.email)
-			else:
-				user.active_token.invalidate()
-				user.active_token.save()
+			user.active_token.invalidate()
+			user.active_token.save()
 			user.status = User.LOGGED_OUT
 			user.active_token = None
 			user.save()
@@ -156,7 +166,7 @@ class Validator(APIView):
 				if user.active_token == None:
 					log("ERROR: user <%s> verifies with wrong session"%user.email)
 					return invalidData()
-				if not user.active_token.verifyUserTicket(params, request.session):
+				if not user.active_token.verifyUserTicket(params):
 					log("ERROR: user <%s> verifies with wrong ticket"%user.email)
 					return invalidData()
 				return genericOK("Ticket verified")
@@ -171,7 +181,7 @@ class Validator(APIView):
 					# Caronte is already invulnerable to Selfie attack but we want to log if it happens
 					log("ERROR: possible Selfie attack on user <%s>"%user.email)
 					return invalidData()
-				if not o_user.active_token.verifyUserTicket(params, request.session):
+				if not o_user.active_token.verifyUserTicket({"ticket":other}):
 					log("ERROR: user <%s> received wrong ticket from <%s>"%(user.email, o_user.email))
 					return genericError("Other ticket not verified")
 				tmp_key = json.dumps({"ID": CARONTE_ID, "key":security.randB64(128), "email_A":user.email, "email_B":o_user.email, "ID_A":user.IV, "ID_B":o_user.IV})
@@ -217,11 +227,7 @@ class Registration(APIView):
 		if not CARONTE_ALLOW_REGISTRATION: return invalidData()
 		try:
 			params = json.loads(request.body.decode("UTF-8"))
-			#user = User()
 			user_data = json.loads(security.decryptPBE(SECRET_KEY, params["user"], params["IV"]))
-			#user.email = user_data["email"]
-			#user.name = user_data["name"]
-			#user.setPassword(user_data["password"])
 			user = User.createNewUser(user_data["name"], user_data["email"], user_data["password"])
 			user.save()
 		except:
@@ -236,7 +242,7 @@ class Registration(APIView):
 			if user.active_token == None:
 				log("ERROR: user <%s> updates with wrong session"%user.email)
 				return invalidData()
-			if not user.active_token.verifyUserTicket(params, request.session):
+			if not user.active_token.verifyUserTicket(params):
 				log("ERROR: user <%s> updates with wrong ticket"%user.email)
 				return invalidData()
 			cipher_ticket = params["ticket"]["creds"]
@@ -295,31 +301,36 @@ class SampleProvider(APIView):
 			params = json.loads(request.body.decode("UTF-8"))
 			if "ticket" not in params or params["ticket"] == None:
 				return invalidData()
-			"""
-			if (caronte_client.verifyTicket(ticket)){ // verify user's credentials
-				user_key = caronte_client.getOtherKey(ticket.email);
-				response(user_key); // send key for user
-			}
-			"""
-			# here we emulate sending the ticket to Caronte for validation
-			user = User.objects.filter(IV=params["ticket"]["ID"]).get();
-			if user.active_token == None:
+			
+			# identify the user in CaronteClient
+			user_id = params["ticket"]["ID"]
+			
+			# connect to Caronte Server
+			car_cli = client.CaronteClient("http", "localhost", request.META['SERVER_PORT'])
+
+			# login to Caronte
+			if not car_cli.login("sample.provider@caronte.com", "Sampl3Pr0videR"):
 				return invalidData()
-			if not user.active_token.verifyUserTicket(params, request.session):
-				log("ERROR: user <%s> logs in to SampleProvider with wrong ticket"%user.email)
+
+			# validate other ticket
+			if not car_cli.validateTicket(params["ticket"]):
 				return invalidData()
-			# here we simulate caronte returning a session key
-			SP_EMAIL = "sample.provider@caronte.com"
-			rand_key = security.randB64(128)
-			tmp_key = tmp_key = json.dumps({"ID": CARONTE_ID, "key":rand_key, "email_A":SP_EMAIL, "email_B":user.email, "ID_A":security.randB64(), "ID_B":user.IV})
-			tmp_iv = security.randB64()
-			other_key = security.encryptPBE(user.getPassword(), tmp_key, tmp_iv)
-			final_key = base64.b64encode(json.dumps({"key":other_key, "iv":tmp_iv}).encode("ascii"))
-			request.session["tmp_key"] = rand_key
+
+			# obtain the session key for the user
+			other_key = car_cli.getOtherKey(user_id)
+
+			# obtain own session key, normally you don't want to do this...
+			# but we are closing the Caronte client connection and storing the key in the session data
+			request.session["tmp_key"] = car_cli.valid_users[user_id]["key"]
+
+			# close connection with Caronte
+			car_cli.logout()
+
+			# respond to the user with the session key
 			res = {
 				"status" : STAT_OK,
 				"msg" : "Tickets verified",
-				"key" : final_key.decode("UTF-8")
+				"key" : other_key
 			}
 			return JsonResponse(res)
 		except:

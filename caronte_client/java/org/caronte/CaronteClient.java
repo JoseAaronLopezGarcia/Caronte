@@ -131,7 +131,7 @@ public class CaronteClient {
 				this.ticket.put("user_iv", user_iv);
 				this.ticket.put("email", email);
 				this.cookie = con.getHeaderField("Set-Cookie");
-				return true;
+				return this.getUserDetails(true)!=null;
 			}
 			catch (Exception e){
 				return false;

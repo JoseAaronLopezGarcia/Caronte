@@ -13,10 +13,11 @@ def randB64(size=BS):
 	return base64.b64encode(Random.new().read(BS)).decode("UTF-8")
 
 def toB64(data):
+	if type(data) == type(""): data = data.encode("UTF-8")
 	return base64.b64encode(data).decode("UTF-8")
 
 def fromB64(data):
-	return  base64.b64decode(data)
+	return base64.b64decode(data)
 
 # Padding helper functions
 def pad(data, bs=BS):

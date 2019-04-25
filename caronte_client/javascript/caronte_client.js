@@ -40,7 +40,10 @@ function CaronteClient(protocol, host, port) {
 						ctx.caronte_id = plain_ticket["name"]+" "+plain_ticket["version"];
 						console.log("Connected to: "+ctx.caronte_id);
 						ctx.ticket = {"t":token, "c":1, "user_iv":data["IV"], "email":email};
-						onOk();
+						ctx.getUserDetails(function(user){
+							if (user!=null) onOk();
+							else okErr();
+						}, true);
 					}
 					catch (err){ // usually means incorrect password
 						console.log("Could not decrypt token");
@@ -171,6 +174,8 @@ function CaronteClient(protocol, host, port) {
 			}
 			var params = null;
 			if (other_ticket != null){
+				if (Object.prototype.toString.call(other_ticket) !== "[object String]")
+					other_ticket = JSON.stringify(other_ticket);
 				var ticket_iv = CaronteSecurity.randB64();
 				params = {
 					"ID":ctx.ticket.user_iv,

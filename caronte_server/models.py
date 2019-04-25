@@ -7,7 +7,6 @@ from caronte.settings import CARONTE_ID
 from caronte.settings import CARONTE_VERSION
 from caronte.settings import CARONTE_ANTI_BRUTEFORCE_ITERS
 from caronte.settings import CARONTE_MAX_TOKEN_COUNT
-from caronte.settings import CARONTE_USE_SESSION
 from caronte.common import log
 
 from caronte_client.python import caronte_security as security
@@ -66,7 +65,7 @@ class User(models.Model):
 		return security.verifyPassword(password, self.getPassword(), self.IV, CARONTE_ANTI_BRUTEFORCE_ITERS)
 		
 	def isLoggedIn(self):
-		return self.active_token != None and self.active_token.active and self.active_token.ctr > 0
+		return self.active_token != None and self.active_token.valid and self.active_token.ctr > 0
 		
 	def toDict(self): # serialize
 		return {
@@ -116,37 +115,25 @@ class Token(models.Model):
 		if iv == None: iv = self.owner.IV
 		return security.encryptPBE(self.owner.getPassword(), data, iv)
 	
-	def verifyUserTicket(self, params, session):
-		if self._validate(params, session):
+	def verifyUserTicket(self, params):
+		if self._validate(params):
 			self.revalidate()
 			return True
 		else:
 			self.invalidate()
-			session["used_iv"] = dict()
 			return False
 	
-	def _validate(self, params, session):
+	def _validate(self, params):
 		try:
 			user = self.owner
 			if not self.valid:
 				log("ERROR: user <%s> attempts to validate invalidated token"%user.email)
-				return False
-			if CARONTE_USE_SESSION and ("user" not in session or session["user"] != user.id):
-				log("ERROR: user <%s> verifies with wrong session"%user.email)
 				return False
 			ticket = params["ticket"]["SGT"]
 			ticket_iv = params["ticket"]["iv"]
 			if ticket_iv == user.IV:
 				log("ERROR: misuse of User IV in communication by <%s>"%user.email)
 				return False
-			if CARONTE_USE_SESSION:
-				if "used_iv" not in session: session["used_iv"] = dict()
-				if ticket_iv in session["used_iv"]:
-					log("ERROR: reuse of IV in communication by <%s>"%user.email)
-					return False
-				used_iv = dict(session["used_iv"])
-				used_iv[ticket_iv] = True
-				session["used_iv"] = used_iv
 			user_token = json.loads(security.decryptPBE(user.getPassword(), ticket, ticket_iv))
 			if not security.verifyPassword(self.sys_data, user_token["t"], self.IV):
 				log("ERROR: user <%s> provides incorrect token"%user.email)
