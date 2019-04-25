@@ -406,7 +406,6 @@ unsigned char* CaronteClient_decryptOther(CaronteClient* self, const char* other
 	CaronteValidUser* other_user = (CaronteValidUser*)HashMap_Get((HashMap*)(self->valid_users), map_key);
 	if (other_user!=NULL){
 		char* json = CaronteSecurity_fromB64Str(data);
-		//return NULL;
 		cJSON* jmsg = cJSON_Parse(json);
 		cJSON* iv = cJSON_GetObjectItem(jmsg, "iv");
 		cJSON* jdata = cJSON_GetObjectItem(jmsg, "data");
@@ -417,6 +416,24 @@ unsigned char* CaronteClient_decryptOther(CaronteClient* self, const char* other
 		return ret;
 	}
 	return NULL;
+}
+
+char* CaronteClient_encryptOther(CaronteClient* self, const char* other_email,
+	const unsigned char* data, size_t len);
+unsigned char* CaronteClient_decryptOther(CaronteClient* self, const char* other_email,
+	const char* data, size_t* len);
+	
+char* CaronteClient_encryptOtherStr(CaronteClient* self,
+		const char* other_email, const char* data){
+	return CaronteClient_encryptOther(self, other_email, (const unsigned char*)data, strlen(data));
+}
+
+char* CaronteClient_decryptOtherStr(CaronteClient* self,
+		const char* other_email, const char* data){
+	size_t len;
+	char* ret = (char*)CaronteClient_decryptOther(self, other_email, data, &len);
+	ret[len] = 0;
+	return ret;
 }
 
 char* CaronteClient_getOtherKey(CaronteClient* self, const char* other_email){

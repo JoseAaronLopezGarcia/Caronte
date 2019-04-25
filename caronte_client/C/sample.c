@@ -128,8 +128,7 @@ char* getProviderData(CaronteClient* client, char* provider_id){
 		cJSON* jmsg = cJSON_GetObjectItem(jres, "msg");
 		if (jmsg!=NULL){
 			// decrypt data from service provider
-			size_t len;
-			secret_data = (char*)CaronteClient_decryptOther(client, provider_id, jmsg->valuestring, &len);
+			secret_data = CaronteClient_decryptOtherStr(client, provider_id, jmsg->valuestring);
 		}
 		cJSON_Delete(jres);
 		HTTP_Response_destroy(res);

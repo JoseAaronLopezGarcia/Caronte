@@ -53,6 +53,10 @@ char* CaronteClient_encryptOther(CaronteClient* self, const char* other_email,
 	const unsigned char* data, size_t len);
 unsigned char* CaronteClient_decryptOther(CaronteClient* self, const char* other_email,
 	const char* data, size_t* len);
+char* CaronteClient_encryptOtherStr(CaronteClient* self, const char* other_email,
+	const char* data);
+char* CaronteClient_decryptOtherStr(CaronteClient* self, const char* other_email,
+	const char* data);
 char* CaronteClient_getOtherKey(CaronteClient* self, const char* other_email);
 char* CaronteClient_setOtherKey(CaronteClient* self, const char* key);
 void CaronteUser_destroy(CaronteUser* self);
