@@ -1,11 +1,26 @@
 #include "hashmap.h"
 
+// Simple chaining hashmap implementation
+
+
 #define INITIAL_SIZE 8
 #define MAX_LOAD_FACTOR 1.3
 
 #include "utils.h"
 #define my_malloc caronte_malloc
 #define my_free caronte_free
+
+typedef struct Node{
+	size_t key;
+	void* value;
+	struct Node* next;
+}Node;
+
+typedef struct HashMap{
+	Node** table;
+	size_t T;
+	int N;
+}HashMap;
 
 static void resizeTable(HashMap* self, size_t new_size);
 
@@ -89,11 +104,28 @@ void* HashMap_Del(HashMap* self, size_t key){
 	return ret;
 }
 
-void HashMap_Destroy(HashMap* self){
+void HashMap_ForEach(HashMap* self, void (*callback)(size_t key, void* value)){
+	if (callback==NULL) return;
 	int i=0;
 	for (; i<self->T; i++){
 		Node* node = self->table[i];
 		while (node != NULL){
+			callback(node->key, node->value);
+			node = node->next;
+		}
+	}
+}
+
+void HashMap_Destroy(HashMap* self){
+	HashMap_DestroyCB(self, NULL);
+}
+
+void HashMap_DestroyCB(HashMap* self, void (*callback)(size_t key, void* value)){
+	int i=0;
+	for (; i<self->T; i++){
+		Node* node = self->table[i];
+		while (node != NULL){
+			if (callback!=NULL) callback(node->key, node->value);
 			Node* aux = node;
 			node = node->next;
 			my_free(aux);

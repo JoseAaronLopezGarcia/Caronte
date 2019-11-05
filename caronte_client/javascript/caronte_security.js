@@ -1,17 +1,24 @@
 var CaronteSecurity = {
 
+	// Encode string or bytearray into base64 string
 	toB64 : function(data){
+		if (Object.prototype.toString.call(data) === "[object Array]"){ // got byte array
+			data = byteArrayToWordArray(data); // convert to CryptoJS word array
+		}
 		return CryptoJS.enc.Base64.stringify(data);
 	},
 	
+	// Decode base64 string
 	fromB64 : function(data){
 		return CryptoJS.enc.Base64.parse(data);
 	},
 
+	// Generate a base64 encoded array of random bytes of given size
 	randB64 : function(size=16){
 		return CaronteSecurity.toB64(CryptoJS.lib.WordArray.random(size));
 	},
 
+	// Add padding to a given string
 	pad : function(data, BS=16){
 		var len = data.length;
 		var count = BS - (len%BS);
@@ -23,62 +30,83 @@ var CaronteSecurity = {
 		return res;
 	},
 
+	// Remove padding from a given string
 	unpad : function(data){
-		var count = data.charCodeAt(data.length-1);
-		var res = data.substring(0, data.length-count);
-		return res;
-	},
-	
-	generateMD5Hash : function (password){
-		var md5_hash = CryptoJS.MD5(password);
-		var salt = md5_hash.toString(CryptoJS.enc.Base64);
-		return salt;
-	},
-	
-	derivePassword : function(password){
-		var salt = this.generateMD5Hash(password);
-		var p1 = this.pad(password+salt);
-		var k = CryptoJS.SHA256(p1);
-		return {"key": k, "p1": p1, "salt": salt};
-	},
-	
-	encryptPassword : function (password, IV, iters){
-		var pw = password;
-		var k = null;
-		var p1 = null;
-		for (var i=0; i<iters; i++){
-			var derived = this.derivePassword(pw)
-			k = derived["key"];
-			p1 = derived["p1"];
-			pw = password + CaronteSecurity.generateMD5Hash(p1);
+		if (Object.prototype.toString.call(data) === "[object String]"){ // unpad a string
+			var count = data.charCodeAt(data.length-1);
+			var res = data.substring(0, data.length-count);
+			return res;
 		}
+		else{ // unpad a bytearray
+			var count = data[data.length-1];
+			var res = data.slice(0, data.length-count);
+			return res;
+		}
+	},
+	
+	// Generate base64 encoded 128 bit hash of a given text
+	generate128Hash : function (text){
+		var hash = CryptoJS.MD5(text);
+		return hash.toString(CryptoJS.enc.Base64);
+	},
+	
+	// Generate base64 encoded 256 bit hash of a given text
+	generate256Hash : function (text){
+		var hash = CryptoJS.SHA256(text);
+		return hash.toString(CryptoJS.enc.Base64);
+	},
+	
+	// Text Derivation Function
+	deriveText : function (text, IV, iter_count){
+		// derive a 256 bit key from text
+		// TODO: replace with PBKDF2 or bcrypt
+		var t1 = text;
+		for (var i=0; i < iter_count; i++){
+			t1 = this.pad(text+this.generate256Hash(t1));
+		}
+		var k = CryptoJS.SHA256(t1);
+		// encrypt text using key derived from itself
 		IV = CaronteSecurity.fromB64(IV);
-		var p2 = CryptoJS.AES.encrypt(p1, k, {iv: IV, padding: CryptoJS.pad.NoPadding});
-		return CaronteSecurity.toB64(p2.ciphertext);
+		var t2 = CryptoJS.AES.encrypt(t1, k, {iv: IV, padding: CryptoJS.pad.NoPadding});
+		var derived = CaronteSecurity.toB64(t2.ciphertext); // encode result in base64
+		return derived;
 	},
 	
-	deriveEmail : function(email){
-		return CaronteSecurity.encryptPassword(email, CaronteSecurity.generateMD5Hash(email), 1)
+	// Verify that a given text corresponds to a given derived-text
+	verifyDerivedText : function (text, derivedtext, IV, iters){
+		return CaronteSecurity.deriveText(text, IV, iters) == derivedtext;
 	},
 	
-	verifyPassword : function (password, ciphertext, IV, iters){
-		return CaronteSecurity.encryptPassword(password, IV, iters) == ciphertext;
-	},
-	
-	encryptPBE : function(p2, plaintext, IV){
+	// encrypt data using 256 bit key and a 128 bit IV
+	encryptKey : function(key, plaintext, IV){
+		k = CaronteSecurity.fromB64(key);
 		IV = CaronteSecurity.fromB64(IV);
-		var k1 = this.derivePassword(p2)["key"];
 		var cipherparams = {iv: IV, padding: CryptoJS.pad.NoPadding};
-		var ciphertext = CryptoJS.AES.encrypt(this.pad(plaintext), k1, cipherparams);
+		var ciphertext = CryptoJS.AES.encrypt(this.pad(plaintext), k, cipherparams);
 		return CaronteSecurity.toB64(ciphertext.ciphertext);
 	},
 
-	decryptPBE : function(p2, ciphertext, IV){
+	// decrypt data using a 256 bit key and a 128 bit IV
+	decryptKey : function(key, ciphertext, IV){
+		k = CaronteSecurity.fromB64(key);
 		IV = CaronteSecurity.fromB64(IV);
 		var encrypted = {"ciphertext" : CaronteSecurity.fromB64(ciphertext)};
-		var k1 = this.derivePassword(p2)["key"];
 		var cipherparams = {iv: IV, padding: CryptoJS.pad.NoPadding};
-		var plaintext = CryptoJS.AES.decrypt(encrypted, k1, cipherparams).toString(CryptoJS.enc.Utf8);
+		var plaintext = CryptoJS.AES.decrypt(encrypted, k, cipherparams);
+		try{ plaintext = plaintext.toString(CryptoJS.enc.Utf8); }
+		catch (err) { plaintext = wordArrayToByteArray(plaintext, 0); }
 		return this.unpad(plaintext);
+	},
+	
+	// encrypt data using password and IV
+	encryptPBE(pw, plaintext, IV){
+		var key = this.generate256Hash(pw);
+		return this.encryptKey(key, plaintext, IV);
+	},
+	
+	// decrypt data using password and IV
+	decryptPBE(pw, ciphertext, IV){
+		var key = this.generate256Hash(pw);
+		return this.decryptKey(key, ciphertext, IV);
 	}
 };

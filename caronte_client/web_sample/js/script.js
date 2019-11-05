@@ -1,9 +1,15 @@
+// Sample Web Login using Angular-JS
+
 var PROTOCOL = "http";
 var HOST = window.location.hostname;
 var PORT = window.location.port;
 var PROVIDER_URL = PROTOCOL+"://"+HOST+":"+PORT+"/provider/";
 
-var caronte_client = CaronteClient(PROTOCOL, HOST, PORT);
+var caronte_client = null;
+CaronteClient(PROTOCOL, HOST, PORT,
+	function (conn){ caronte_client = conn; },
+	function () {} // no connection to Caronte
+);
 
 //register App with Angular
 var crAuthApp = angular.module('crAuthApp', ["ngRoute"]);
@@ -11,7 +17,7 @@ var crAuthApp = angular.module('crAuthApp', ["ngRoute"]);
 //app route configuration
 crAuthApp.config(function($routeProvider, $locationProvider){
 	$locationProvider.hashPrefix('');
-	$routeProvider.when('/',
+	$routeProvider.when('/', // startup controller
 		{
 			controller: "startupController",
 			controllerAs: "ctx",
@@ -25,21 +31,21 @@ crAuthApp.config(function($routeProvider, $locationProvider){
 			}
 		}
 	)
-	.when('/main',
+	.when('/main', // main page controller
 		{
 			controller: "crAuthController",
 			controllerAs: "ctx",
 			templateUrl: "pages/main.html"
 		}
 	)
-	.when('/login',
+	.when('/login', // login page controller
 		{
 			controller: "loginController",
 			controllerAs: "ctx",
 			templateUrl: "pages/login.html"
 		}
 	)
-	.when('/register',
+	.when('/register', // register page controller
 		{
 			controller: "registerController",
 			controllerAs: "ctx",
@@ -55,14 +61,15 @@ crAuthApp.config(['$httpProvider', function($httpProvider) {
 	$httpProvider.defaults.withCredentials = true;
 }]);
 
+// startup controller
 crAuthApp.controller("startupController", function($route, $window, $timeout){
 	var ctx = this;
-	if (caronte_client.isLoggedIn()){
+	if (caronte_client.isLoggedIn()){ // if logged in go to main page
 		caronte_client.getUserDetails(function(user){
 			$window.location.href = "#/main";
 		});
 	}
-	else{
+	else{ // go to login page
 		$window.location.href = "#/login";
 	}
 });
@@ -70,87 +77,94 @@ crAuthApp.controller("startupController", function($route, $window, $timeout){
 // controller for main page
 crAuthApp.controller("crAuthController", function($route, $window, $timeout){
 
-	if (!caronte_client.isLoggedIn()){
+	if (!caronte_client.isLoggedIn()){ // check if logged in
 		$window.location.href = "#/login";
 		return;
 	}
 
 	var ctx = this;
-	ctx.user = caronte_client.user;
-	ctx.ticket = "";
-	ctx.old_pass = "";
-	ctx.new_pass = "";
-	ctx.name = ctx.user.name;
-	ctx.msg = "";
-	ctx.data = null;
-	ctx.caronte_id = caronte_client.caronte_id;
+	ctx.user = caronte_client.user; // user details as given by Caronte
+	ctx.ticket = ""; // success or error message in ticket verification
+	ctx.old_pass = ""; // binding for old password field in user update form
+	ctx.new_pass = ""; // binding for new password field in user update form
+	ctx.name = ctx.user.name; // binding for user name field in user update form
+	ctx.msg = ""; // binding for result message in user update form
+	ctx.data = null; // binding for data from service provider
+	ctx.caronte_id = caronte_client.caronte_id; // binding for caronte ID
 	
+	// callback for logout button
 	ctx.logout = function(){
-		var onLogout = function(){
+		var onLogout = function(){ // callback for caronte client library
 			$window.location.href = "#/";
 			$window.location.reload();
 		}
-		caronte_client.logout(onLogout, onLogout);
+		caronte_client.logout(onLogout, onLogout); // call caronte client library
 	};
 	
+	// callback for update user button
 	ctx.updateUser = function(){
 		ctx.msg = "Updating...";
+		// call caronte client library
 		caronte_client.updateUser(ctx.name, ctx.old_pass, ctx.new_pass,
-			function(){
-				caronte_client.getUserDetails(function(user){
+			function(){ // OK callback
+				caronte_client.getUserDetails(function(user){ // update user details
 					$timeout(function (){ctx.user=user;});
 				});
-				$timeout(function (){
+				$timeout(function (){ // send GUI message
 					ctx.password = "";
 					ctx.msg = "Update done";
 				});
 			},
-			function(){
-				$timeout(function (){ctx.msg = "Unable to update user details";});
+			function(){ // ERROR callback
+				$timeout(function (){ctx.msg = "Unable to update user details";}); // send GUI message
 			}
 		);
 	};
 	
+	// callback for validate ticket button
 	ctx.validateTicket = function(){
 		ctx.ticket = "";
-		caronte_client.validateTicket(
-			function(){
-				$timeout(function(){ctx.ticket = "Success!";});
+		caronte_client.validateTicket( // call caronte client library
+			function(){ // OK callback
+				$timeout(function(){ctx.ticket = "Success!";}); // send GUI message
 			},
-			function(){
-				$timeout(function(){ctx.ticket = "Error";});
+			function(){ // ERROR callback
+				$timeout(function(){ctx.ticket = "Error";}); // send GUI message
 			}
 		);
 	};
 	
+	// callback for revalidate ticket button
 	ctx.revalidateTicket = function(){
 		ctx.ticket = "";
-		caronte_client.revalidateTicket(
-			function(){
-				$timeout(function(){ctx.ticket = "Success!";});
+		caronte_client.revalidateTicket( // call caronte client library
+			function(){ // OK callback
+				$timeout(function(){ctx.ticket = "Success!";}); // send GUI message
 			},
-			function(){
-				$timeout(function(){ctx.ticket = "Error";});
+			function(){ // ERROR callback
+				$timeout(function(){ctx.ticket = "Error";}); // send GUI message
 			}
 		);
 	};
 	
+	// callback for invalidate ticket button
 	ctx.invalidateTicket = function(){
 		ctx.ticket = "";
-		caronte_client.invalidateTicket(
-			function(){
-				$timeout(function(){ctx.ticket = "Success!";});
+		caronte_client.invalidateTicket( // call caronte client library
+			function(){ // OK callback
+				$timeout(function(){ctx.ticket = "Success!";}); // send GUI message
 			},
-			function(){
-				$timeout(function(){ctx.ticket = "Error";});
+			function(){ // ERROR callback
+				$timeout(function(){ctx.ticket = "Error";}); // send GUI message
 			}
 		);
 	};
 	
+	// callback for connect to service provider button
 	ctx.connectServiceProvider = function(){
 		var ticket = caronte_client.getTicket(); // get a valid ticket
 		if (ticket != null){
-			// login
+			// build HTTP request for login
 			var xhttp = new XMLHttpRequest();
 			xhttp.onreadystatechange = function(){
 				if (xhttp.readyState === 4 && xhttp.status === 200){
@@ -172,8 +186,12 @@ crAuthApp.controller("crAuthController", function($route, $window, $timeout){
 						xhttp2.open("GET", PROVIDER_URL, true);
 						xhttp2.send();
 					}
+					else{
+						ctx.data = res["status"] + " - " + res["msg"];
+					}
 				}
 			}
+			// send HTTP request for login
 			xhttp.open("POST", PROVIDER_URL, true);
 			xhttp.send(JSON.stringify({"ticket":ticket})); // send ticket to authenticate
 		}
@@ -190,13 +208,22 @@ crAuthApp.controller("loginController", function($route, $window, $timeout, $loc
 	ctx.password = "";
 	ctx.msg = "";
 	
+	// callback for login button
 	ctx.login = function(){
 		ctx.msg = "Authenticating with server...";
-		caronte_client.login(ctx.email, ctx.password,
-			function(){ $window.location.href = "#/"; },
-			function(){ ctx.msg = "Unable to login, check email and password"; }
+		caronte_client.login(ctx.email, ctx.password, // call caronte client library
+			function(){ $window.location.href = "#/"; }, // OK callback
+			function(){ ctx.msg = "Unable to login, check email and password"; } // ERROR callback
 		);
 	};
+	ctx.testlogin = function(){
+		ctx.msg = "Authenticating with server...";
+		caronte_client.login("test@caronte.com", "Caront3Te$t", // call caronte client library
+			function(){ $window.location.href = "#/"; }, // OK callback
+			function(){ ctx.msg = "Unable to login, check email and password"; } // ERROR callback
+		);
+	};
+	
 });
 
 // controller for registration page
@@ -209,15 +236,16 @@ crAuthApp.controller("registerController", function($route, $window, $timeout){
 	ctx.secret = "";
 	ctx.msg = "";
 	
+	// callback for register button
 	ctx.register = function(){
 		if (ctx.password != ctx.password2){
 			ctx.msg = "Passwords do not match, check again";
 			return;
 		}
 		ctx.msg = "Sending data to server...";
-		caronte_client.register(ctx.name, ctx.email, ctx.password, ctx.secret,
-			function(){ $window.location.href = "#/login"; },
-			function(){ ctx.msg = "Unable to register, user already exists? Try login"; }
+		caronte_client.register(ctx.name, ctx.email, ctx.password, ctx.secret, // call caronte client library
+			function(){ $window.location.href = "#/login"; }, // OK callback
+			function(){ ctx.msg = "Unable to register, user already exists? Try login"; } // ERROR callback
 		);
 	};
 });

@@ -1,5 +1,6 @@
 #include "utils.h"
 
+// memory manager functions used by CaronteClient, by default standard malloc, free, realloc
 static MemMgr memmgr = {
 	.my_malloc = &malloc,
 	.my_realloc = &realloc,
@@ -34,6 +35,7 @@ void caronte_setfree(void (my_free)(void*)){
 	memmgr.my_free = my_free;
 }
 
+// check that a line is empty (or has only whitespaces)
 int String_isEmpty(const char* line){
 	for (int i=0; line[i]; i++){
 		char c = line[i];
@@ -44,7 +46,7 @@ int String_isEmpty(const char* line){
 	return 1;
 }
 
-// Python source code
+// string hashing function, taken from Python source code
 long String_hash(const char* str){
 	size_t _slen = strlen(str);
 	ssize_t _len = _slen - 1;
@@ -60,6 +62,7 @@ long String_hash(const char* str){
 	return (x == -1)? -2 : x;
 }
 
+// duplicate a string
 char* String_dup(const char* str){
 	size_t len = strlen(str);
 	char* copy = (char*)caronte_malloc(len+1);

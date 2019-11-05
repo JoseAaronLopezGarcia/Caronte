@@ -7,128 +7,105 @@ import datetime
 from Crypto import Random
 from Crypto.Cipher import AES
 
-BS = AES.block_size # block size in bytes
+BS = AES.block_size # default block size in bytes (for AES)
 
-def randB64(size=BS):
-	return base64.b64encode(Random.new().read(BS)).decode("UTF-8")
-
+# Encode string or bytearray into base64 string
 def toB64(data):
 	if type(data) == type(""): data = data.encode("UTF-8")
 	return base64.b64encode(data).decode("UTF-8")
 
+# Decode base64 string
 def fromB64(data):
 	return base64.b64decode(data)
 
-# Padding helper functions
+# Generate a base64 encoded array of random bytes of given size
+def randB64(size=BS):
+	return toB64(Random.new().read(size))
+
+# Add padding to a given string
 def pad(data, bs=BS):
 	count = bs - (len(data)%bs)
-	filler = chr(count)
-	return data + filler*count
+	if type(data) == type(""): return data + chr(count)*count
+	else: # bytearray
+		res = bytearray(data)
+		for i in range(0, count): res.append(count)
+		return bytes(res)
 
+# Remove padding from a given string
 def unpad(data):
-	count = ord(data[-1])
+	count = data[-1]
+	if type(data) == type(""): count = ord(count)
 	return data[0 : -count]
 
-# Generate MD5 hash
-def generateMD5Hash(data):
-	md5_hash = hashlib.md5()
-	md5_hash.update(data.encode("UTF-8"))
-	md5hash = base64.b64encode(md5_hash.digest()).decode("UTF-8")
-	return md5hash
+# Generate base64 encoded 128 bit hash of a given text
+def generate128Hash(data):
+	hash_func = hashlib.md5()
+	hash_func.update(data.encode("UTF-8"))
+	hashcode = hash_func.digest()
+	return toB64(hashcode)
 	
-# Generate SHA-256 hash
-def generateSHA256Hash(data):
-	sha_hash = hashlib.sha256()
-	sha_hash.update(data.encode("UTF-8"))
-	shahash = sha_hash.digest()
-	return shahash
+# Generate base64 encoded 256 bit hash of a given text
+def generate256Hash(data):
+	hash_func = hashlib.sha256()
+	hash_func.update(data.encode("UTF-8"))
+	hashcode = hash_func.digest()
+	return toB64(hashcode)
 
-# Generate a 256-bit key out of a password and a derived version of the password
-def derivePassword(password):
-	phash = generateMD5Hash(password)
-	p1 = pad(password+phash)
-	return generateSHA256Hash(p1), p1, phash
+# Text Derivation Function
+def deriveText(text, IV=None, iter_count=1):
+	# default values
+	if iter_count < 1: return text, generate256Hash(text)
+	if IV == None: IV = generate128Hash(text)
+	iv = fromB64(IV)
 
-def encryptPassword(password, IV=None, iter_count=1):
-	if iter_count < 1: return password, IV
-	# generate random IV
-	if IV == None: iv = Random.new().read(BS)
-	else: iv = base64.b64decode(IV)
-	
-	pw = password
-	# generate key and derived password
+	# derive a 256 bit key from text
+	# TODO: replace with PBKDF2 or bcrypt
+	t1 = text
 	for i in range(0, iter_count):
-		k, p1, _ = derivePassword(pw)
-		pw = password+generateMD5Hash(p1)
-	
-	# Generate second derived password (p2), to be stored in DB
-	cipher = AES.new(k, AES.MODE_CBC, iv)
-	p2 = cipher.encrypt(p1)
-	
-	return base64.b64encode(p2).decode("UTF-8"), base64.b64encode(iv).decode("UTF-8")
+		t1 = pad(text+generate256Hash(t1))
+	key = fromB64(generate256Hash(t1))
+	# encrypt text using key derived from itself
+	cipher = AES.new(key, AES.MODE_CBC, iv)
+	t2 = cipher.encrypt(t1)
+	# encode result in base64
+	return toB64(t2)
 
-def deriveEmail(email):
-	return encryptPassword(email, generateMD5Hash(email), 1)[0]
-
-# Verify that a given password corresponds to a given cipher-password
-def verifyPassword(password, ciphertext, IV, iter_count=1):
+# Verify that a given text corresponds to a given derived-text
+def verifyDerivedText(text, derivedtext, IV, iter_count):
 	try:
-		return encryptPassword(password, IV, iter_count)[0] == ciphertext
+		return deriveText(text, IV, iter_count) == derivedtext
 	except:
 		return False
 
-# encrypt data using password and IV
-def encryptPBE(p2, plaintext, iv):
-	iv = base64.b64decode(iv)
-	k1, _, _ = derivePassword(p2)
-	cipher = AES.new(k1, AES.MODE_CBC, iv)
+# encrypt data using 256 bit key and a 128 bit IV
+def encryptKey(key, plaintext, IV):
+	k = fromB64(key)
+	iv = base64.b64decode(IV)
+	cipher = AES.new(k, AES.MODE_CBC, iv)
 	ciphertext = cipher.encrypt(pad(plaintext))
-	b64 = base64.b64encode(ciphertext)
-	return b64.decode("UTF-8")
+	b64 = toB64(ciphertext)
+	if type(b64) != type(""): b64 = b64.decode("UTF-8") # convert to string
+	return b64
 
-# decrypt data using password and IV
-def decryptPBE(p2, ciphertext, iv):
-	iv = base64.b64decode(iv)
-	k1, _, _ = derivePassword(p2)
-	cipher = AES.new(k1, AES.MODE_CBC, iv)
-	plaintext = unpad(cipher.decrypt(base64.b64decode(ciphertext)).decode("UTF-8"))
+# decrypt data using a 256 bit key and a 128 bit IV
+def decryptKey(key, ciphertext, IV):
+	k = fromB64(key)
+	iv = base64.b64decode(IV)
+	cipher = AES.new(k, AES.MODE_CBC, iv)
+	b64 = fromB64(ciphertext)
+	pt = cipher.decrypt(b64)
+	try: pt = pt.decode("UTF-8") # convert to string
+	except: pass
+	plaintext = unpad(pt)
 	return plaintext
 
-# Returns the estimated strength of a password as a number betweeen 0 and 100
-def calculatePasswordStrength(password):
-	upper = 0
-	lower = 0
-	num = 0
-	nonalphanum = 0
-	size = len(password)
-	distrib = int(size/4)
-	extra = size%4 * 5 # account for extra characters in the password
-	
-	if distrib < 1: return 0 # very small password...
-	
-	for c in password:
-		if c >= '0' and c <= '9': num+=1
-		elif c >= 'a' and c <= 'z': lower+=1
-		elif c >= 'A' and c <= 'Z': upper+=1
-		else: nonalphanum+=1
-	
-	dist_upper = (80*abs(upper-distrib))/(3*size)
-	dist_lower = (80*abs(lower-distrib))/(3*size)
-	dist_num = (80*abs(num-distrib))/(3*size)
-	dist_non = (80*abs(nonalphanum-distrib))/(3*size)
-	
-	strength = (20-dist_upper) + (20-dist_lower) + (20-dist_num) + (20-dist_non) + min(size, 20)
-	penalty = 0
-	
-	if upper == 0: penalty+=10
-	if lower == 0: penalty+=10
-	if num == 0: penalty+=10
-	if nonalphanum == 0: penalty+=10
-	
-	if penalty < strength: strength-=penalty # avoid negative result
-	strength += extra
-	# adjust for out of bounds calculations
-	strength = max(0, strength)
-	strength = min(100, strength)
-	return int(strength)
+# encrypt data using password and IV
+def encryptPBE(password, plaintext, IV):
+	key = generate256Hash(password) # TODO: change to PBKDF2
+	return encryptKey(key, plaintext, IV)
+
+# decrypt data using password and IV
+def decryptPBE(password, ciphertext, IV):
+	key = generate256Hash(password) # TODO: change to PBKDF2
+	return decryptKey(key, ciphertext, IV)
 

@@ -31,10 +31,13 @@ ALLOWED_HOSTS = ['*']
 
 # Caronte version used to identify with client
 CARONTE_ID = "Caronte Authentication Server"
-CARONTE_VERSION = "0.9.2"
+CARONTE_VERSION = "0.9.3"
 
 # File where Caronte issues logs (project dir by default)
 CARONTE_LOG_FILE = os.path.join(BASE_DIR, "caronte_log.txt")
+
+# Key used to encrypt fake tickets
+CARONTE_FAKE_TICKET_KEY = 'RrHmpnt/QCXgDCCBrHWaEA=='
 
 # Resetting a password using the same password is usually a bad idea
 # However in Caronte it is a valid security measure as it re-encrypts the password using a new IV
@@ -43,7 +46,7 @@ CARONTE_ALLOW_SAME_PW_RESET = True
 # The password derivation function in Caronte uses iterations to make it slower
 # The higher the number the more time to calculate a derived password
 # This ultimately leads to slower bruteforce attacks.
-CARONTE_ANTI_BRUTEFORCE_ITERS = 50000
+CARONTE_ANTI_BRUTEFORCE_ITERS = 1000
 
 # User registration API should be disabled by default unless using HTTPS
 CARONTE_ALLOW_REGISTRATION = True
@@ -88,6 +91,22 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
 ]
 
 CORS_ORIGIN_ALLOW_ALL = True

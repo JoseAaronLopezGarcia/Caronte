@@ -11,25 +11,19 @@ from caronte.common import log
 
 from caronte_client.python import caronte_security as security
 
+# Database Table: User
 class User(models.Model):
-	name = models.CharField(max_length=200, blank=False, null=False)
-	email = models.CharField(max_length=200, blank=False, null=False, unique=True)
-	email_hash = models.CharField(max_length=400, blank=False, null=False, unique=True)
-	password = models.CharField(max_length=500, blank=False, null=False)
-	status = models.IntegerField(null=False, default=0)
-	joined = models.DateTimeField(auto_now_add=True, null=True)
-	failed_attempts = models.IntegerField(null=False, default=0)
-	last_active = models.DateTimeField(auto_now=True)
-	active_token = models.ForeignKey('Token', on_delete=models.SET_NULL, null=True)
-	IV = models.CharField(max_length=500, blank=True, null=True, unique=True)
-	pw_score = models.IntegerField(null=False, default=0)
-	
-	# state of a user account
-	INACTIVE = 0 # initial, account must be activated via email
-	LOGGED_IN = 1 # user is logged in
-	LOGGED_OUT = 2 # user is not logged in
-	BLOCKED = 3 # user account has been blocked
-	
+	# table fields
+	name = models.CharField(max_length=200, blank=False, null=False) # user name
+	email = models.CharField(max_length=200, blank=False, null=False, unique=True) # user email
+	email_hash = models.CharField(max_length=400, blank=False, null=False, unique=True) # user ID for tickets
+	password = models.CharField(max_length=500, blank=False, null=False) # derived password
+	IV = models.CharField(max_length=500, blank=True, null=True, unique=True) # IV used in password derivation
+	active_ticket = models.ForeignKey('Ticket', on_delete=models.SET_NULL, null=True) # currently active ticket for this user
+	joined = models.DateTimeField(auto_now_add=True) # timestamp of table creation
+	last_active = models.DateTimeField(auto_now=True) # timestamp of last table modification
+
+	# Create new User
 	def createNewUser(name, email, password):
 		name = name.strip()
 		email = email.strip()
@@ -42,134 +36,153 @@ class User(models.Model):
 			return user
 		return None
 	
+	# Set user email
 	def setEmail(self, email):
 		self.email = email
-		self.email_hash = security.deriveEmail(email)
-	
+		self.email_hash = security.deriveText(email, security.generate128Hash(email), CARONTE_ANTI_BRUTEFORCE_ITERS)
+
+	# Set user password
 	def setPassword(self, password):
-		self.p2, self.IV = security.encryptPassword(password, iter_count=CARONTE_ANTI_BRUTEFORCE_ITERS)
-		self.pw_score = security.calculatePasswordStrength(password)
-		self.password = security.encryptPBE(SECRET_KEY, self.p2, self.IV)
+		IV = security.randB64() # generate random IV
+		# create a statically derived password
+		p1 = security.deriveText(password, security.generate128Hash(password), CARONTE_ANTI_BRUTEFORCE_ITERS)
+		# encrypt random IV with statically derived password
+		self.IV = json.dumps({"plain": IV, "cipher": security.encryptPBE(p1, security.fromB64(IV), security.generate128Hash(p1))})
+		# derive password using random IV
+		self.password = security.deriveText(password, IV, CARONTE_ANTI_BRUTEFORCE_ITERS)
 		return self.password
 	
+	# Get plain IV used to derive password
+	def getPasswordIV(self):
+		IV = json.loads(self.IV)
+		return IV["plain"]
+	
+	# Get encrypted IV used to derive password
+	def getUserPasswordIV(self):
+		IV = json.loads(self.IV)
+		return IV["cipher"]
+	
+	# Get password
 	def getPassword(self):
-		if hasattr(self, "p2"): return self.p2
-		self.p2 = security.decryptPBE(SECRET_KEY, self.password, self.IV)
-		return self.p2
+		return self.password
 	
-	def recipherPassword(new_secret, old_secret=SECRET_KEY):
-		self.p2 = security.decryptPBE(old_secret, self.password, self.IV)
-		self.password = security.encryptPBE(new_secret, self.p2, self.IV)
-	
+	# Verify a plain password against derived password
 	def verifyPassword(self, password):
-		return security.verifyPassword(password, self.getPassword(), self.IV, CARONTE_ANTI_BRUTEFORCE_ITERS)
+		return security.verifyDerivedText(password, self.getPassword(), self.getPasswordIV(), CARONTE_ANTI_BRUTEFORCE_ITERS)
 		
+	# Check if user is logged in
 	def isLoggedIn(self):
-		return self.active_token != None and self.active_token.valid and self.active_token.ctr > 0
-		
-	def toDict(self): # serialize
+		return self.active_ticket != None and self.active_ticket.valid and self.active_ticket.ctr > 0
+	
+	# Serialize object into a Dict
+	def toDict(self):
 		return {
 			"name" : self.name,
 			"email" : self.email,
 			"joined" : str(self.joined)
 		}
+
+
+# Database Table: Ticket
+class Ticket(models.Model):
+	# table fields
+	timestamp = models.DateTimeField(auto_now_add=True, null=False) # timestamp of table creation
+	tmp_key = models.CharField(max_length=200, blank=True, null=False) # ticket key for SGT encryption
+	token = models.CharField(max_length=200, blank=True, null=False, unique=True) # internal special value for ticket
+	ctr = models.IntegerField(null=False, default=0) # ticket usage counter
+	valid = models.BooleanField(default=True) # ticket validity
+	owner = models.ForeignKey(User, on_delete=models.CASCADE, null=False) # ticket owner
 	
-	def get_time_diff(self):
-		if self.time_posted:
-			now = datetime.datetime.utcnow().replace(tzinfo=utc)
-			timediff = now - self.time_posted
-			return timediff.total_seconds()
-
-
-
-class Token(models.Model):
-	timestamp = models.DateTimeField(auto_now_add=True, null=False)
-	IV = models.CharField(max_length=100, blank=True, null=True)
-	ctr = models.IntegerField(null=False, default=0)
-	valid = models.BooleanField(default=True)
-	owner = models.ForeignKey(User, on_delete=models.CASCADE, null=False)
-	user_data = models.CharField(max_length=200, blank=True, null=False)
-	sys_data = models.CharField(max_length=200, blank=True, null=False)
-	
+	# Create new ticket for given user
 	def generateNew(owner):
-		token = Token()
-		token.owner = owner
-		token.sys_data = security.randB64()+security.generateMD5Hash(str(token.timestamp))
-		token.user_data, token.IV = security.encryptPassword(token.sys_data)
-		token.ctr = 0
-		token.save()
-		if owner.active_token != None:
-			owner.active_token.invalidate()
-			owner.active_token.save()
-		owner.active_token = token
+		ticket = Ticket()
+		ticket.owner = owner
+		ticket.tmp_key = security.randB64(32) # random 256bit key
+		ticket.token = security.randB64() # random 16 byte integer
+		ticket.ctr = 0 # initially not yet used
+		ticket.save()
+		# set owner's current ticket to the new one
+		if owner.active_ticket != None: # invalidate old ticket if exists
+			owner.active_ticket.invalidate()
+			owner.active_ticket.save()
+		owner.active_ticket = ticket
 		owner.save()
-		return token
+		return ticket
 	
+	# Create an encrypted TGT for the user
 	def createTicketForUser(self, iv=None):
 		info = {
 			"name" : CARONTE_ID,
 			"version" : CARONTE_VERSION,
-			"token" : self.user_data
+			"token" : self.token,
+			"tmp_key" : self.tmp_key
 		}
 		data = json.dumps(info)
-		if iv == None: iv = self.owner.IV
-		return security.encryptPBE(self.owner.getPassword(), data, iv)
+		if iv == None: iv = security.randB64()
+		return security.encryptPBE(self.owner.getPassword(), data, iv) # encrypt with derived password
 	
+	# Verify a user SGT, if ticket doesn't verify, it will be invalidated
 	def verifyUserTicket(self, params):
-		if self._validate(params):
-			self.revalidate()
+		if self._validate(params): # check validity of user SGT
+			self.revalidate() # increment usage count
 			return True
 		else:
-			self.invalidate()
+			self.invalidate() # invalidate this and all future tickets
 			return False
 	
+	# Actual ticket validator, private method, returns boolean
 	def _validate(self, params):
 		try:
 			user = self.owner
-			if not self.valid:
-				log("ERROR: user <%s> attempts to validate invalidated token"%user.email)
+			if not self.valid: # check that this ticket is still valid
+				log("ERROR: user <%s> attempts to validate invalidated ticket"%user.email)
 				return False
 			ticket = params["ticket"]["SGT"]
-			ticket_iv = params["ticket"]["iv"]
-			if ticket_iv == user.IV:
-				log("ERROR: misuse of User IV in communication by <%s>"%user.email)
+			ticket_iv = params["ticket"]["IV"]
+			try: # decrypt ticket
+				pt = security.decryptKey(self.tmp_key, ticket, ticket_iv)
+				user_ticket = json.loads(pt)
+			except:
+				log("ERROR: Ticket from <%s> is unreadable"%user.email)
 				return False
-			user_token = json.loads(security.decryptPBE(user.getPassword(), ticket, ticket_iv))
-			if not security.verifyPassword(self.sys_data, user_token["t"], self.IV):
-				log("ERROR: user <%s> provides incorrect token"%user.email)
+			if user_ticket["t"] != self.token: # check that token matches
+				log("ERROR: user <%s> provides incorrect ticket"%user.email)
 				return False
-			if user_token["email"] != self.owner.email:
-				log("ERROR: user email in ticket <%s> does not match for <%s>"%(user_token["email"], user.email))
+			if user_ticket["email"] != self.owner.email: # check that email matches
+				log("ERROR: user email in ticket <%s> does not match for <%s>"%(user_ticket["email"], user.email))
 				return False
-			if user_token["c"] != self.ctr+1:
-				log("ERROR: pausible replay attack on user <%s>, token count does not match, expected %d, got %d"%(self.owner.email, self.ctr+1, user_token["c"]))
+			if user_ticket["user_iv"] != user.getPasswordIV(): # check that password IV matches
+				log("ERROR: user IV in ticket <%s> does not match for <%s>"%(user_ticket["email"], user.email))
 				return False
-			if self.ctr >= CARONTE_MAX_TOKEN_COUNT:
-				log("ERROR: user <%s> has exceed maximum allowed tickets for token"%user.email)
+			if user_ticket["c"] != self.ctr+1: # check expected counter
+				log("ERROR: pausible replay attack on user <%s>, ticket count does not match, expected %d, got %d"%(self.owner.email, self.ctr+1, user_ticket["c"]))
 				return False
-			return True
+			if self.ctr >= CARONTE_MAX_TOKEN_COUNT: # check maximum ticket usage
+				log("ERROR: user <%s> has exceed maximum allowed tickets for ticket"%user.email)
+				return False
+			return True # all checks OK
 		except:
 			traceback.print_exc()
 			return False
 	
+	# Mark ticket as invalid
 	def invalidate(self):
 		if self.valid:
 			self.valid = False
 			self.save()
 	
+	# Increment ticket counter
 	def revalidate(self):
 		if self.valid:
 			self.ctr += 1
 			self.save()
 
 
-
+# Database Table: Session
 class Session(models.Model):
-	timestamp = models.DateTimeField(auto_now_add=True, null=False)
-	user_A = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-	user_B = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="other_user")
-	token_A = models.ForeignKey(Token, on_delete=models.SET_NULL, null=True)
-	token_B = models.ForeignKey(Token, on_delete=models.SET_NULL, null=True, related_name="other_token")
-	key_A = models.CharField(max_length=200, blank=False, null=False)
-	key_B = models.CharField(max_length=200, blank=False, null=False)
-	key_iv = models.CharField(max_length=200, blank=False, null=False)
+	# table fields
+	timestamp = models.DateTimeField(auto_now_add=True, null=False) # timestamp of table creation
+	ticket_A = models.ForeignKey(Ticket, on_delete=models.SET_NULL, null=True) # user A's ticket
+	ticket_B = models.ForeignKey(Ticket, on_delete=models.SET_NULL, null=True, related_name="other_ticket") # user B's ticket
+	key = models.CharField(max_length=200, blank=False, null=False) # session key
+	key_iv = models.CharField(max_length=200, blank=False, null=False) # IV used to encrypt session key

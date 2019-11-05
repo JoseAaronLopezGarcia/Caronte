@@ -69,3 +69,8 @@
 		* this avoids sending the email in plain text all the time
 		* Generating a TGT still requires sending the email in plaintext
 		* but Caronte now allows to use the user IV instead if possible to generate a TGT
+	
+*** 0.9.3
+	- SGT, KGT and session keys are now encrypted using a temporary key provided by the TGT instead of user password
+	- Simplified some code
+	- Derived Password IV is now encrypted
