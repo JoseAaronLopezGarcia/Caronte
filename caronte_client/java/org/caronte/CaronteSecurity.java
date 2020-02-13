@@ -6,16 +6,27 @@ import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 public class CaronteSecurity {
+
+	public static final int KEY_SIZE = 32; // size of cryptographic key in bytes
+	public static final int IV_SIZE = 16; // size of Initialization Vector in bytes
+	public static final String CRYPTO_ENGINE = "AES/CBC/NoPadding"; // cryptographic engine and parameters used
+	public static final String HASH_128 = "MD5"; // hash function for 128 bit hashes
+	public static final String HASH_256 = "SHA-256"; // hash function for 256 bit hashes
+	public static final String KDF = "PBKDF2WithHmacSHA1"; // Password Derivation Function
 
 	/**
 	 * Generate a random string of 16 bytes
@@ -163,7 +174,7 @@ public class CaronteSecurity {
 	 * @return Base64 encoded array of 16 bytes
 	 */
 	public static String generate128Hash(String text) throws NoSuchAlgorithmException{
-		MessageDigest md = MessageDigest.getInstance("MD5"); // use MD5 for 128 bit hashes
+		MessageDigest md = MessageDigest.getInstance(HASH_128); // use MD5 for 128 bit hashes
 		md.update(text.getBytes());
 		byte[] digest = md.digest();
 		return Base64.getEncoder().encodeToString(digest);
@@ -176,7 +187,7 @@ public class CaronteSecurity {
 	 * @return Base64 encoded array of 32 bytes
 	 */
 	public static String generate256Hash(String text) throws NoSuchAlgorithmException{
-		MessageDigest md = MessageDigest.getInstance("SHA-256"); // use SHA2 for 256 bit hashes
+		MessageDigest md = MessageDigest.getInstance(HASH_256); // use SHA2 for 256 bit hashes
 		md.update(text.getBytes());
 		byte[] digest = md.digest();
 		return Base64.getEncoder().encodeToString(digest);
@@ -189,27 +200,27 @@ public class CaronteSecurity {
 	 * @param IV initialization vector to randomize output
 	 * @param iter_count number of iterations for the Key Derivation Function
 	 * @return resulting derived text in Base64
+	 * @throws InvalidKeySpecException 
 	 */
 	public static String deriveText(String text, String IV, int iter_count)
 			throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
-			IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException, InvalidAlgorithmParameterException{
+			IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException, InvalidAlgorithmParameterException, InvalidKeySpecException{
 		
-		// derive a 256 bit key from text
-		// TODO: replace this loop with a proper KDF such as BPKDF2
-		String t1 = text;
-		for (int i=0; i < iter_count; i++){
-			t1 = pad(text+generate256Hash(t1));
-		}
 		byte[] iv = fromB64(IV.getBytes());
-		byte[] k = fromB64(generate256Hash(t1).getBytes());
 		
+		// derive a 256 bit key from text using PBKDF2
+		SecretKeyFactory skf = SecretKeyFactory.getInstance(KDF);
+        PBEKeySpec spec = new PBEKeySpec(text.toCharArray(), iv, iter_count, KEY_SIZE*8);
+        SecretKey key = skf.generateSecret(spec);
+        byte[] k = key.getEncoded();
+        
 		// encrypt plain text using key derived from it and given IV
-		Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+		Cipher cipher = Cipher.getInstance(CRYPTO_ENGINE);
 		SecretKeySpec secretKey = new SecretKeySpec(k, "AES");
 		IvParameterSpec ivspec = new IvParameterSpec(iv);
 		cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivspec);
 		// encode result in base64
-		return toB64(cipher.doFinal(t1.getBytes("UTF-8")));
+		return toB64(cipher.doFinal(pad(text).getBytes("UTF-8")));
 	}
 	
 	/**
@@ -220,10 +231,11 @@ public class CaronteSecurity {
 	 * @param IV initialization vector used to generate the derived text
 	 * @param iter_count number of iterations used for the KDF
 	 * @return true if there is a match
+	 * @throws InvalidKeySpecException 
 	 */
 	public static boolean verifyDerivedText(String plaintext, String derivedtext, String IV, int iter_count)
 			throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
-			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException{
+			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException{
 		return derivedtext.equals(CaronteSecurity.deriveText(plaintext, IV, iter_count)); // derive text again and compare result
 	}
 	
@@ -256,7 +268,7 @@ public class CaronteSecurity {
 		byte[] k = fromB64(key.getBytes());
 		
 		// use AES with CBC mode, padding is added to plaintext before encryption
-		Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+		Cipher cipher = Cipher.getInstance(CRYPTO_ENGINE);
 		SecretKeySpec secretKey = new SecretKeySpec(k, "AES");
 		IvParameterSpec ivspec = new IvParameterSpec(iv);
 		cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivspec);
@@ -282,7 +294,7 @@ public class CaronteSecurity {
 		byte[] k = fromB64(key.getBytes());
 		
 		// use AES with CBC mode, padding is removed from plaintext after decryption
-		Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+		Cipher cipher = Cipher.getInstance(CRYPTO_ENGINE);
 		SecretKeySpec secretKey = new SecretKeySpec(k, "AES");
 		IvParameterSpec ivspec = new IvParameterSpec(iv);
 		cipher.init(Cipher.DECRYPT_MODE, secretKey, ivspec);
@@ -303,7 +315,7 @@ public class CaronteSecurity {
 	public static String encryptPBE(String password, String plaintext, String IV)
 			throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
 			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException{
-		String key = generate256Hash(password); // TODO: use a proper PBKDF
+		String key = generate256Hash(password); // NOTE: should use deriveText on password first
 		return encryptKey(key, plaintext, IV);
 	}
 	
@@ -318,7 +330,7 @@ public class CaronteSecurity {
 	public static String encryptPBE(String password, byte[] plaintext, String IV)
 			throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
 			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException{
-		String key = generate256Hash(password); // TODO: use a proper PBKDF
+		String key = generate256Hash(password); // NOTE: should use deriveText on password first
 		return encryptKey(key, plaintext, IV);
 	}
 	
@@ -333,7 +345,7 @@ public class CaronteSecurity {
 	public static byte[] decryptPBE(String password, String ciphertext, String IV)
 			throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
 			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException{
-		String key = generate256Hash(password); // TODO: use a proper PBKDF
+		String key = generate256Hash(password); // NOTE: should use deriveText on password first
 		return decryptKey(key, ciphertext, IV);
 	}
 

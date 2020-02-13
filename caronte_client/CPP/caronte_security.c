@@ -8,19 +8,14 @@
 
 #define AES_BLOCK_SIZE 16
 
-#include "utils.h"
-#define my_malloc caronte_malloc
-#define my_free caronte_free
-
-
 /**
  * Encode a string into a Base64 string
  * 
  * @param data standard string
  * @return Base64 encoded string
  */
-char* CaronteSecurity_toB64Str(const char* data){
-	return CaronteSecurity_toB64Bytes((const unsigned char*)data, strlen(data));
+char* CaronteSecurity::toB64Str(const char* data){
+	return CaronteSecurity::toB64Bytes((const unsigned char*)data, strlen(data));
 }
 
 /**
@@ -30,7 +25,7 @@ char* CaronteSecurity_toB64Str(const char* data){
  * @param len array length
  * @return Base64 encoded string
  */
-char* CaronteSecurity_toB64Bytes(const unsigned char* data, size_t len){
+char* CaronteSecurity::toB64Bytes(const unsigned char* data, size_t len){
 	size_t out_len;
 	return (char*)base64_encode(data, len, &out_len);
 }
@@ -41,9 +36,9 @@ char* CaronteSecurity_toB64Bytes(const unsigned char* data, size_t len){
  * @param data base64 encoded string
  * @return decoded string
  */
-char* CaronteSecurity_fromB64Str(const char* data){
+char* CaronteSecurity::fromB64Str(const char* data){
 	size_t len;
-	unsigned char* res = CaronteSecurity_fromB64Bytes(data, &len);
+	unsigned char* res = CaronteSecurity::fromB64Bytes(data, &len);
 	char* ret = (char*)my_malloc(len+2);
 	memcpy(ret, res, len);
 	ret[len] = 0;
@@ -58,11 +53,11 @@ char* CaronteSecurity_fromB64Str(const char* data){
  * @param len pointer to store resulting array length
  * @return decoded byte array
  */
-unsigned char* CaronteSecurity_fromB64Bytes(const char* data, size_t* len){
+unsigned char* CaronteSecurity::fromB64Bytes(const char* data, size_t& len){
 	size_t out_len;
-	*len = strlen(data);
-	unsigned char* ret = base64_decode((const unsigned char *)data, (size_t)*len, &out_len);
-	*len = out_len;
+	size_t in_len = strlen(data);
+	unsigned char* ret = base64_decode((const unsigned char *)data, in_len, &out_len);
+	len = out_len;
 	return ret;
 }
 
@@ -71,8 +66,8 @@ unsigned char* CaronteSecurity_fromB64Bytes(const char* data, size_t* len){
  * 
  * @return Base64 encoded string of 16 bytes in length
  */
-char* CaronteSecurity_rand16(){
-	return CaronteSecurity_randB64(AES_BLOCK_SIZE);
+char* CaronteSecurity::rand16(){
+	return CaronteSecurity::randB64(AES_BLOCK_SIZE);
 }
 
 /**
@@ -81,10 +76,10 @@ char* CaronteSecurity_rand16(){
  * @param size number of random bytes in the string
  * @return Base64 encoded string of bytes
  */
-char* CaronteSecurity_randB64(size_t size){
+char* CaronteSecurity::randB64(size_t size){
 	unsigned char* buffer = (unsigned char*)my_malloc(size);
 	RAND_bytes(buffer, size);
-	char* res = CaronteSecurity_toB64Bytes(buffer, size);
+	char* res = CaronteSecurity::toB64Bytes(buffer, size);
 	my_free(buffer);
 	return res;
 }
@@ -98,7 +93,7 @@ char* CaronteSecurity_randB64(size_t size){
  * @param block_size padding block size
  * @return padded byte array
  */
-unsigned char* CaronteSecurity_pad(const unsigned char* data, size_t len, size_t* new_len, size_t block_size){
+unsigned char* CaronteSecurity::pad(const unsigned char* data, size_t len, size_t* new_len, size_t block_size){
 	size_t count = block_size - (len%block_size);
 	*new_len = len+count;
 	unsigned char* res = (unsigned char*)my_malloc((*new_len)+1);
@@ -118,7 +113,7 @@ unsigned char* CaronteSecurity_pad(const unsigned char* data, size_t len, size_t
  * @param new_len pointer to store length of resulting array
  * @return unpadded byte array
  */
-unsigned char* CaronteSecurity_unpad(const unsigned char* data, size_t len, size_t* new_len){
+unsigned char* CaronteSecurity::unpad(const unsigned char* data, size_t len, size_t* new_len){
 	int count = (int)data[len-1];
 	if (count>len){
 		*new_len = len;
@@ -139,10 +134,10 @@ unsigned char* CaronteSecurity_unpad(const unsigned char* data, size_t len, size
  * @param text message to be digested
  * @return Base64 encoded array of 16 bytes
  */
-char* CaronteSecurity_generate128Hash(const char* text){
+char* CaronteSecurity::generate128Hash(const char* text){
 	unsigned char result[MD5_DIGEST_LENGTH];
 	MD5((const unsigned char*)text, strlen(text), result);
-	return CaronteSecurity_toB64Bytes(result, MD5_DIGEST_LENGTH);
+	return CaronteSecurity::toB64Bytes(result, MD5_DIGEST_LENGTH);
 }
 
 /**
@@ -151,10 +146,10 @@ char* CaronteSecurity_generate128Hash(const char* text){
  * @param text message to be digested
  * @return Base64 encoded array of 32 bytes
  */
-char* CaronteSecurity_generate256Hash(const char* text){
+char* CaronteSecurity::generate256Hash(const char* text){
 	unsigned char result[32];
 	SHA256((const unsigned char*)text, strlen(text), result);
-	return CaronteSecurity_toB64Bytes(result, 32);
+	return CaronteSecurity::toB64Bytes(result, 32);
 }
 
 /**
@@ -165,51 +160,42 @@ char* CaronteSecurity_generate256Hash(const char* text){
  * @param iter_count number of iterations for the Key Derivation Function
  * @return resulting derived text in Base64
  */
-char* CaronteSecurity_deriveText(const char* text, const char* IV, size_t iters){
+char* CaronteSecurity::deriveText(const char* text, const char* IV, size_t iters){
 	// derive a 256 bit key from text
 	// TODO: replace this loop with a proper KDF such as BPKDF2
-	/*
 	char* t1 = String_dup(text);
 	size_t t1_len = strlen(t1);
 	for (int i=0; i<iters; i++){
-		char* t1_hash = CaronteSecurity_generate256Hash(t1);
+		char* t1_hash = CaronteSecurity::generate256Hash(t1);
 		size_t t2_len = strlen(text)+strlen(t1_hash);
 		char* t2 = my_malloc(t2_len+1);
 		sprintf(t2, "%s%s", text, t1_hash);
-		unsigned char* padded = CaronteSecurity_pad((const unsigned char*)t2, t2_len, &t1_len, AES_BLOCK_SIZE);
+		unsigned char* padded = CaronteSecurity::pad((const unsigned char*)t2, t2_len, &t1_len, AES_BLOCK_SIZE);
 		my_free(t1);
 		my_free(t2);
 		t1 = padded;
 	}
-	char* t1_hash = CaronteSecurity_generate256Hash(t1);
+	char* t1_hash = CaronteSecurity::generate256Hash(t1);
 	size_t key_size;
-	unsigned char* key = CaronteSecurity_fromB64Bytes(t1_hash, &key_size);
-	*/
-	int text_len = strlen(text);
-	int iv_len;
-	size_t padded_len;
-	unsigned char* padded = CaronteSecurity_pad(text, text_len, padded_len, AES_BLOCK_SIZE);
-	unsigned char* iv = CaronteSecurity_fromB64Bytes(IV, &iv_len);
-	unsigned char* key = my_malloc(32);
-	printf("Deriving key\n");
-	PKCS5_PBKDF2_HMAC_SHA1(text, text_len, iv, iv_len, iters, 32, key);
-	printf("Key derived\n");
+	unsigned char* key = CaronteSecurity::fromB64Bytes(t1_hash, &key_size);
 	// encrypt plain text using key derived from it and given IV
 	int len;
-	unsigned char* ciphertext = (unsigned char*)my_malloc(padded_len);
+	size_t iv_len;
+	unsigned char* iv = CaronteSecurity::fromB64Bytes(IV, &iv_len);
+	unsigned char* ciphertext = (unsigned char*)my_malloc(t1_len);
 	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
 	EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
 	EVP_CIPHER_CTX_set_padding(ctx, 0);
-	EVP_EncryptUpdate(ctx, ciphertext, &len, padded, padded_len);
+	EVP_EncryptUpdate(ctx, ciphertext, &len, t1, t1_len);
 	// encode result in base64
-	char* res = CaronteSecurity_toB64Bytes(ciphertext, len);
+	char* res = CaronteSecurity::toB64Bytes(ciphertext, len);
 	// cleanup
 	my_free(ciphertext);
 	my_free(iv);
-	my_free(padded);
+	my_free(t1);
+	my_free(t1_hash);
 	my_free(key);
 	EVP_CIPHER_CTX_free(ctx);
-	printf("derived text: %s\n", res);
 	return res;
 }
 
@@ -222,9 +208,9 @@ char* CaronteSecurity_deriveText(const char* text, const char* IV, size_t iters)
  * @param iter_count number of iterations used for the KDF
  * @return true if there is a match
  */
-int CaronteSecurity_verifyDerivedText(const char* text, const char* derivedtext, const char* IV, size_t iters){
+int CaronteSecurity::verifyDerivedText(const char* text, const char* derivedtext, const char* IV, size_t iters){
 	// derive text again and compare result
-	char* p2 = CaronteSecurity_deriveText(text, IV, iters);
+	char* p2 = CaronteSecurity::deriveText(text, IV, iters);
 	int res = strcmp(derivedtext, p2) == 0;
 	my_free(p2);
 	return res;
@@ -239,14 +225,14 @@ int CaronteSecurity_verifyDerivedText(const char* text, const char* derivedtext,
  * @param IV initialization vector to be used in encryption
  * @return ciphertext
  */
-char* CaronteSecurity_encryptKey(const char* key, const unsigned char* plaintext, size_t len, const char* IV){
+char* CaronteSecurity::encryptKey(const char* key, const unsigned char* plaintext, size_t len, const char* IV){
 	size_t iv_len, key_len;
-	unsigned char* iv = CaronteSecurity_fromB64Bytes(IV, &iv_len);
-	unsigned char* k = CaronteSecurity_fromB64Bytes(key, &key_len);
+	unsigned char* iv = CaronteSecurity::fromB64Bytes(IV, &iv_len);
+	unsigned char* k = CaronteSecurity::fromB64Bytes(key, &key_len);
 	
 	size_t new_len;
 	int cipher_len;
-	unsigned char* padded = CaronteSecurity_pad(plaintext, len, &new_len, AES_BLOCK_SIZE);
+	unsigned char* padded = CaronteSecurity::pad(plaintext, len, &new_len, AES_BLOCK_SIZE);
 	unsigned char* ciphertext = (unsigned char*)my_malloc(new_len);
 
 	// use AES with CBC mode, padding is added to plaintext before encryption
@@ -255,7 +241,7 @@ char* CaronteSecurity_encryptKey(const char* key, const unsigned char* plaintext
 	EVP_CIPHER_CTX_set_padding(ctx, 0);
 	EVP_EncryptUpdate(ctx, ciphertext, &cipher_len, padded, (int)new_len);
 	// encode result in base64
-	char* res = CaronteSecurity_toB64Bytes(ciphertext, new_len);
+	char* res = CaronteSecurity::toB64Bytes(ciphertext, new_len);
 	// cleanup
 	my_free(padded);
 	my_free(iv);
@@ -274,12 +260,12 @@ char* CaronteSecurity_encryptKey(const char* key, const unsigned char* plaintext
  * @param IV initialization vector used in encryption
  * @return plaintext
  */
-unsigned char* CaronteSecurity_decryptKey(const char* key, const char* ciphertext, size_t* len, const char* IV){
+unsigned char* CaronteSecurity::decryptKey(const char* key, const char* ciphertext, size_t* len, const char* IV){
 	int plain_len;
 	size_t iv_len, key_len, datalen;
-	unsigned char* iv = CaronteSecurity_fromB64Bytes(IV, &iv_len);
-	unsigned char* k = CaronteSecurity_fromB64Bytes(key, &key_len);
-	unsigned char* cipherdata = CaronteSecurity_fromB64Bytes(ciphertext, &datalen);
+	unsigned char* iv = CaronteSecurity::fromB64Bytes(IV, &iv_len);
+	unsigned char* k = CaronteSecurity::fromB64Bytes(key, &key_len);
+	unsigned char* cipherdata = CaronteSecurity::fromB64Bytes(ciphertext, &datalen);
 	unsigned char* plaintext = (unsigned char*)my_malloc(datalen);
 	
 	// use AES with CBC mode, padding is removed from plaintext after decryption
@@ -287,7 +273,7 @@ unsigned char* CaronteSecurity_decryptKey(const char* key, const char* ciphertex
 	EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, k, iv);
 	EVP_CIPHER_CTX_set_padding(ctx, 0);
 	EVP_DecryptUpdate(ctx, plaintext, &plain_len, cipherdata, datalen);
-	unsigned char* res = CaronteSecurity_unpad(plaintext, plain_len, len);
+	unsigned char* res = CaronteSecurity::unpad(plaintext, plain_len, len);
 	// cleanup
 	my_free(iv);
 	my_free(k);
@@ -306,9 +292,9 @@ unsigned char* CaronteSecurity_decryptKey(const char* key, const char* ciphertex
  * @param IV to be used in encryption
  * @return ciphertext
  */
-char* CaronteSecurity_encryptPBE(const char* password, const unsigned char* plaintext, size_t len, const char* IV){
-	char* key = CaronteSecurity_generate256Hash(password); // TODO: use a proper PBKDF
-	char* ciphertext = CaronteSecurity_encryptKey(key, plaintext, len, IV);
+char* CaronteSecurity::encryptPBE(const char* password, const unsigned char* plaintext, size_t len, const char* IV){
+	char* key = CaronteSecurity::generate256Hash(password); // TODO: use a proper PBKDF
+	char* ciphertext = CaronteSecurity::encryptKey(key, plaintext, len, IV);
 	my_free(key);
 	return ciphertext;
 }
@@ -322,9 +308,9 @@ char* CaronteSecurity_encryptPBE(const char* password, const unsigned char* plai
  * @param IV used in encryption
  * @return plaintext
  */
-unsigned char* CaronteSecurity_decryptPBE(const char* password, const char* ciphertext, size_t* len, const char* IV){
-	char* key = CaronteSecurity_generate256Hash(password); // TODO: use a proper PBKDF
-	char* plaintext = CaronteSecurity_decryptKey(key, ciphertext, len, IV);
+unsigned char* CaronteSecurity::decryptPBE(const char* password, const char* ciphertext, size_t* len, const char* IV){
+	char* key = CaronteSecurity::generate256Hash(password); // TODO: use a proper PBKDF
+	char* plaintext = CaronteSecurity::decryptKey(key, ciphertext, len, IV);
 	my_free(key);
 	return plaintext;
 }

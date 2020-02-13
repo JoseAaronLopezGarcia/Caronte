@@ -1,5 +1,12 @@
 var CaronteSecurity = {
 
+	KEY_SIZE : 32, // size of cryptographic key in bytes
+	IV_SIZE : 16, // size of Initialization Vector in bytes
+	CRYPTO_ENGINE : "AES/CBC/NoPadding", // cryptographic engine and parameters used
+	HASH_128 : "MD5", // hash function for 128 bit hashes
+	HASH_256 : "SHA-256", // hash function for 256 bit hashes
+	KDF : "PBKDF2WithHmacSHA1", // Password Derivation Function
+
 	// Encode string or bytearray into base64 string
 	toB64 : function(data){
 		if (Object.prototype.toString.call(data) === "[object Array]"){ // got byte array
@@ -58,16 +65,11 @@ var CaronteSecurity = {
 	
 	// Text Derivation Function
 	deriveText : function (text, IV, iter_count){
-		// derive a 256 bit key from text
-		// TODO: replace with PBKDF2 or bcrypt
-		var t1 = text;
-		for (var i=0; i < iter_count; i++){
-			t1 = this.pad(text+this.generate256Hash(t1));
-		}
-		var k = CryptoJS.SHA256(t1);
+		var IV = CaronteSecurity.fromB64(IV);
+		// derive a 256 bit key from text using PBKDF2
+		var k = CryptoJS.PBKDF2(text, IV, { keySize: CaronteSecurity.KEY_SIZE/4, iterations: iter_count });
 		// encrypt text using key derived from itself
-		IV = CaronteSecurity.fromB64(IV);
-		var t2 = CryptoJS.AES.encrypt(t1, k, {iv: IV, padding: CryptoJS.pad.NoPadding});
+		var t2 = CryptoJS.AES.encrypt(this.pad(text), k, {iv: IV, padding: CryptoJS.pad.NoPadding});
 		var derived = CaronteSecurity.toB64(t2.ciphertext); // encode result in base64
 		return derived;
 	},

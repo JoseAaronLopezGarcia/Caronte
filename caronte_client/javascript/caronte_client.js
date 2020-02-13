@@ -1,10 +1,11 @@
-function CaronteClient(protocol, host, port, onConnectionOk, onConnectionError) {
+function CaronteClient(host, port, onConnectionOk, onConnectionError) {
 
 	// REST API URLs
 	var BASIC_LOGIN_PATH = "/basicauth/";
 	var CR_LOGIN_PATH = "/crauth/";
 	var REGISTER_PATH = "/register/";
 	var VALIDATE_PATH = "/validate/";
+	var PROTOCOL = "http";
 
 	var iface = {
 		
@@ -353,10 +354,9 @@ function CaronteClient(protocol, host, port, onConnectionOk, onConnectionError) 
 	};
 	
 	// Caronte connection details
-	iface.PROTOCOL = protocol;
 	iface.HOST = host;
 	iface.PORT = port;
-	iface.SERVER_URL = protocol + "://" + host + ":" + port;
+	iface.SERVER_URL = PROTOCOL + "://" + host + ":" + port;
 	iface.BASIC_LOGIN_URL = iface.SERVER_URL + BASIC_LOGIN_PATH;
 	iface.CR_LOGIN_URL = iface.SERVER_URL + CR_LOGIN_PATH;
 	iface.REGISTER_URL = iface.SERVER_URL + REGISTER_PATH;

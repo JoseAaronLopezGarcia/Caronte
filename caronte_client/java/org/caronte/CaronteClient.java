@@ -11,6 +11,8 @@ import java.net.URL;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
+import java.util.HashMap;
 import java.util.Map;
 
 import javax.crypto.BadPaddingException;
@@ -23,19 +25,18 @@ import org.json.JSONObject;
 public class CaronteClient {
 	
 	/** Caronte REST API URLs (relative) */
-	static final String CR_LOGIN_PATH = "/crauth/";
-	static final String REGISTER_PATH = "/register/";
-	static final String VALIDATE_PATH = "/validate/";
+	static final public String CR_LOGIN_PATH = "/crauth/";
+	static final public String REGISTER_PATH = "/register/";
+	static final public String VALIDATE_PATH = "/validate/";
+	static final public String PROTOCOL = "http";
 	
 	/** Current connection URLs (absolute) */
-	String PROTOCOL;
-	String HOST;
-	int PORT;
-	String SERVER_URL;
-	String BASIC_LOGIN_URL;
-	String CR_LOGIN_URL;
-	String REGISTER_URL;
-	String VALIDATE_URL;
+	String host;
+	int port;
+	String server_url;
+	String login_url;
+	String register_url;
+	String validate_url;
 	
 	/** Current connection details and credentials */
 	String p1; // statically derived password
@@ -45,7 +46,7 @@ public class CaronteClient {
 	String cookie; // HTTP session cookie
 	JSONObject user; // Caronte User details
 	JSONObject ticket; // Caronte Ticket details
-	String ticket_key; // temporary key to encript tickets
+	String ticket_key; // temporary key to encrypt tickets
 	String caronte_id; // name and version of server
 	Map<String, JSONObject> valid_users; // session details for connections to other users
 
@@ -53,24 +54,22 @@ public class CaronteClient {
 	/**
 	 * Caronte Client constructor
 	 * 
-	 * @param protocol used to connect to server (HTTP by default)
 	 * @param host IP address or domain name
 	 * @param port where the Caronte server is running
 	 * @throws IOException if cannot connect to Caronte Server
 	 */
-	public CaronteClient(String protocol, String host, int port) throws IOException{
-		this.PROTOCOL = protocol;
-		this.HOST = host;
-		this.PORT = port;
-		this.SERVER_URL = protocol + "://" + host + ":" + port;
-		this.CR_LOGIN_URL = this.SERVER_URL + CR_LOGIN_PATH;
-		this.REGISTER_URL = this.SERVER_URL + REGISTER_PATH;
-		this.VALIDATE_URL = this.SERVER_URL + VALIDATE_PATH;
+	public CaronteClient(String host, int port) throws IOException{
+		this.host = host;
+		this.port = port;
+		this.server_url = PROTOCOL + "://" + host + ":" + port;
+		this.login_url = this.server_url + CR_LOGIN_PATH;
+		this.register_url = this.server_url + REGISTER_PATH;
+		this.validate_url = this.server_url + VALIDATE_PATH;
+		this.valid_users = new HashMap<String, JSONObject>();
 		
 		// create connection
-		URL url = new URL(this.CR_LOGIN_URL);
+		URL url = new URL(this.login_url);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-		//con.addRequestProperty("Cookie", this.cookie);
 		con.setRequestMethod("GET");
 		con.setDoInput(true);
 		con.setDoOutput(true);
@@ -106,7 +105,7 @@ public class CaronteClient {
 	/**
 	 * Obtain the next valid ticket to use for credentials
 	 * 
-	 * @param data extra information to be stored withing the SGT
+	 * @param data extra information to be stored within the SGT
 	 * @return JSON formatted String representing the encrypted SGT and user ID
 	 * @throws RuntimeException if cannot encrypt SGT
 	 */
@@ -119,9 +118,9 @@ public class CaronteClient {
 		if (data!=null) ticket_data.put("extra_data", data); // append extra data (if any)
 		
 		// encrypt ticket data with ticket key
-		String valid_token;
+		String valid_ticket;
 		try {
-			valid_token = CaronteSecurity.encryptKey(this.ticket_key, ticket_data.toString(), ticket_iv);
+			valid_ticket = CaronteSecurity.encryptKey(this.ticket_key, ticket_data.toString(), ticket_iv);
 		} catch (InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException
 				| InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException
 				| UnsupportedEncodingException e) {
@@ -132,7 +131,7 @@ public class CaronteClient {
 		JSONObject ret = new JSONObject();
 		ret.put("ID", this.email_hash);
 		ret.put("IV", ticket_iv);
-		ret.put("SGT", valid_token);
+		ret.put("SGT", valid_ticket);
 		
 		// increment ticket counter for next ticket to be synchronized with Caronte
 		this.ticket.put("c", this.ticket.getInt("c")+1);
@@ -157,13 +156,13 @@ public class CaronteClient {
 		try {
 			this.email_hash = CaronteSecurity.deriveText(email, CaronteSecurity.generate128Hash(email), this.kdf_iters);
 		} catch (InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException | IllegalBlockSizeException
-				| BadPaddingException | InvalidAlgorithmParameterException e) {
+				| BadPaddingException | InvalidAlgorithmParameterException | InvalidKeySpecException e) {
 			throw new RuntimeException(e);
 		}
 		params.put("ID", this.email_hash);
 		
 		// connect to server's API
-		URL url = new URL(this.CR_LOGIN_URL);
+		URL url = new URL(this.login_url);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		con.setRequestMethod("POST");
 		con.setDoInput(true);
@@ -225,7 +224,7 @@ public class CaronteClient {
 		JSONObject params = new JSONObject();
 		params.put("ticket", new JSONObject(this.getTicket()));
 		// call REST API
-		URL url = new URL(this.CR_LOGIN_URL);
+		URL url = new URL(this.login_url);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		con.addRequestProperty("Cookie", this.cookie);
 		con.setRequestMethod("DELETE");
@@ -270,7 +269,7 @@ public class CaronteClient {
 		if (this.user == null || update){ // request info from server if no local cache or forced to update
 			
 			// open connection with REST API
-			URL url = new URL(this.CR_LOGIN_URL);
+			URL url = new URL(this.login_url);
 			HttpURLConnection con = (HttpURLConnection) url.openConnection();
 			con.addRequestProperty("Cookie", this.cookie);
 			con.setRequestMethod("PUT");
@@ -330,7 +329,7 @@ public class CaronteClient {
 		params.put("ticket", this.getTicket(extra_data));
 		
 		// open connection with REST API
-		URL url = new URL(this.REGISTER_URL);
+		URL url = new URL(this.register_url);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		con.addRequestProperty("Cookie", this.cookie);
 		con.setRequestMethod("PUT");
@@ -359,7 +358,7 @@ public class CaronteClient {
 					this.ticket.put("user_iv", IV);
 				} catch (InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException
 						| InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException
-						| JSONException e) {
+						| JSONException | InvalidKeySpecException e) {
 					throw new RuntimeException(e);
 				}
 			}
@@ -420,7 +419,7 @@ public class CaronteClient {
 		// connect to Caronte REST API
 		JSONObject params = new JSONObject();
 		params.put("ticket", ticket);
-		URL url = new URL(this.VALIDATE_URL);
+		URL url = new URL(this.validate_url);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		con.addRequestProperty("Cookie", this.cookie);
 		con.setRequestMethod("POST");
@@ -476,21 +475,17 @@ public class CaronteClient {
 		params.put("ID", this.email_hash);
 		
 		// create connection
-		URL url = new URL(this.CR_LOGIN_URL);
+		URL url = new URL(this.login_url);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		con.addRequestProperty("Cookie", this.cookie);
 		con.setRequestMethod("POST");
 		con.setDoInput(true);
 		con.setDoOutput(true);
 	
-		//con.getOutputStream().close();
-		
 		// send JSON request
 		OutputStream os = con.getOutputStream();
 		os.write(params.toString().getBytes("UTF-8"));
 		os.close();
-		
-		//con.connect();
 		
 		// read JSON response
 		InputStream is = con.getInputStream();
@@ -603,7 +598,7 @@ public class CaronteClient {
 			JSONObject info = new JSONObject(CaronteSecurity.fromB64(key)); // parse JSON from base64
 			// decrypt session key from Caronte and parse the resulting JSON
 			JSONObject tmp_key = new JSONObject(new String(
-					CaronteSecurity.decryptKey(this.ticket_key, info.getString("key"), info.getString("IV"))
+					CaronteSecurity.decryptKey(this.ticket_key, info.getString("key"), info.getString("iv"))
 			));
 			JSONObject valid_user = new JSONObject(); // create session information
 			valid_user.put("key", tmp_key.getString("key")); // decrypted session key
@@ -614,18 +609,19 @@ public class CaronteClient {
 			return tmp_key.getString("ID_A"); // let caller know the ID of the connection
 		}
 		catch(Exception e){
+			e.printStackTrace();
 		}
 		return null;
 	}
 	
 	/**
-	 * Read all HTTP text from an input stream into a String
+	 * Read from an input stream into a String until EOF
 	 * 
 	 * @param is
 	 * @return
 	 * @throws IOException
 	 */
-	private static String readAllInput(InputStream is) throws IOException{
+	public static String readAllInput(InputStream is) throws IOException{
 		BufferedReader rd = new BufferedReader(new InputStreamReader(is));
 		String res = "";
 		String line = null;
@@ -633,4 +629,114 @@ public class CaronteClient {
 		is.close();
 		return res;
 	}
+	
+	// accessor methods
+
+	/**
+	 * @return the host
+	 */
+	public String getHost() {
+		return host;
+	}
+
+	/**
+	 * @return the port
+	 */
+	public int getPort() {
+		return port;
+	}
+
+	/**
+	 * @return the server_url
+	 */
+	public String getServer_url() {
+		return server_url;
+	}
+
+	/**
+	 * @return the login_url
+	 */
+	public String getLogin_url() {
+		return login_url;
+	}
+
+	/**
+	 * @return the register_url
+	 */
+	public String getRegister_url() {
+		return register_url;
+	}
+
+	/**
+	 * @return the validate_url
+	 */
+	public String getValidate_url() {
+		return validate_url;
+	}
+
+	/**
+	 * @return the p1
+	 */
+	public String getP1() {
+		return p1;
+	}
+
+	/**
+	 * @return the p2
+	 */
+	public String getP2() {
+		return p2;
+	}
+
+	/**
+	 * @return the email_hash
+	 */
+	public String getEmail_hash() {
+		return email_hash;
+	}
+
+	/**
+	 * @return the kdf_iters
+	 */
+	public int getKdf_iters() {
+		return kdf_iters;
+	}
+
+	/**
+	 * @return the cookie
+	 */
+	public String getCookie() {
+		return cookie;
+	}
+
+	/**
+	 * @return the user
+	 */
+	public JSONObject getUser() {
+		return user;
+	}
+
+	/**
+	 * @return the ticket_key
+	 */
+	public String getTicket_key() {
+		return ticket_key;
+	}
+
+	/**
+	 * @return the caronte_id
+	 */
+	public String getCaronte_id() {
+		return caronte_id;
+	}
+
+	/**
+	 * @return the valid_users
+	 */
+	public Map<String, JSONObject> getValid_users() {
+		return valid_users;
+	}
+	
+	
+	
 }

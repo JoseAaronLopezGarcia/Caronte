@@ -27,8 +27,7 @@ def getProviderData(caronte_conn, provider_id):
 	return secret_data
 
 def main():
-	caronte_conn = CaronteClient("http", "localhost", 8000)
-	
+	caronte_conn = CaronteClient("localhost", 8000)	
 	print("Login:", caronte_conn.login("test@caronte.com", "Caront3Te$t"))
 	user = caronte_conn.getUserDetails()
 	if user != None:

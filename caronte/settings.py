@@ -31,7 +31,7 @@ ALLOWED_HOSTS = ['*']
 
 # Caronte version used to identify with client
 CARONTE_ID = "Caronte Authentication Server"
-CARONTE_VERSION = "0.9.3"
+CARONTE_VERSION = "0.9.4"
 
 # File where Caronte issues logs (project dir by default)
 CARONTE_LOG_FILE = os.path.join(BASE_DIR, "caronte_log.txt")
@@ -40,10 +40,10 @@ CARONTE_LOG_FILE = os.path.join(BASE_DIR, "caronte_log.txt")
 CARONTE_FAKE_TICKET_KEY = 'RrHmpnt/QCXgDCCBrHWaEA=='
 
 # Resetting a password using the same password is usually a bad idea
-# However in Caronte it is a valid security measure as it re-encrypts the password using a new IV
+# However in Caronte it is a valid security measure as it re-hashes the password using a new IV
 CARONTE_ALLOW_SAME_PW_RESET = True
 
-# The password derivation function in Caronte uses iterations to make it slower
+# The password derivation function uses iterations to make it slower for brute-force attackers
 # The higher the number the more time to calculate a derived password
 # This ultimately leads to slower bruteforce attacks.
 CARONTE_ANTI_BRUTEFORCE_ITERS = 1000

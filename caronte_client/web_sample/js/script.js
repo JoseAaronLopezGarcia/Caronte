@@ -1,12 +1,11 @@
 // Sample Web Login using Angular-JS
 
-var PROTOCOL = "http";
 var HOST = window.location.hostname;
 var PORT = window.location.port;
-var PROVIDER_URL = PROTOCOL+"://"+HOST+":"+PORT+"/provider/";
+var PROVIDER_URL = "http://"+HOST+":"+PORT+"/provider/";
 
 var caronte_client = null;
-CaronteClient(PROTOCOL, HOST, PORT,
+CaronteClient(HOST, PORT,
 	function (conn){ caronte_client = conn; },
 	function () {} // no connection to Caronte
 );

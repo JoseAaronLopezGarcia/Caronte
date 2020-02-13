@@ -41,3 +41,18 @@ function wordArrayToByteArray(wordArray, length) {
 	}
 	return [].concat.apply([], result);
 }
+
+function byteArrayTrunc(byteArray, length){
+	var subarray = [];
+	for (var i=0; i<length; i++){
+		subarray[i] = byteArray[i];
+	}
+	return subarray;
+}
+
+function wordArrayTrunc(wordArray, length){
+	var bytelen = length*4;
+	var array = wordArrayToByteArray(wordArray, bytelen);
+	var subarray = byteArrayTrunc(array, bytelen);
+	return byteArrayToWordArray(subarray);
+}

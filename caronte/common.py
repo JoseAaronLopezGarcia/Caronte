@@ -1,3 +1,4 @@
+import os
 from .settings import CARONTE_LOG_FILE
 
 def log(data):

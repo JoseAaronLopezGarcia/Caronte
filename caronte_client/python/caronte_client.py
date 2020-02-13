@@ -14,11 +14,11 @@ class CaronteClient:
 	VALIDATE_PATH = "/validate/"
 	GENERIC_ERROR = {"status":"ERROR", "msg": "Could not connect to server"}
 	INVALID_CREDENTIALS = {"status":"ERROR", "msg":"Invalid Credentials"}
+	PROTOCOL = "http"
 
 	# Constructor
-	def __init__(self, protocol, host, port):
+	def __init__(self, host, port):
 		# Caronte connection details
-		self.PROTOCOL = protocol
 		self.HOST = host
 		self.PORT = port
 		self.conn = HTTPConnection(host, port=port) # HTTP connection

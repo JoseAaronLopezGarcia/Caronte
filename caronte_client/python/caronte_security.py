@@ -6,8 +6,15 @@ import datetime
 
 from Crypto import Random
 from Crypto.Cipher import AES
+from Crypto.Protocol.KDF import PBKDF2
 
 BS = AES.block_size # default block size in bytes (for AES)
+KEY_SIZE = 32 # size of cryptographic key in bytes
+IV_SIZE = 16 # size of Initialization Vector in bytes
+CRYPTO_ENGINE = "AES/CBC/NoPadding" # cryptographic engine and parameters used
+HASH_128 = "MD5" # hash function for 128 bit hashes
+HASH_256 = "SHA-256" # hash function for 256 bit hashes
+KDF = "PBKDF2WithHmacSHA1" # Password Derivation Function
 
 # Encode string or bytearray into base64 string
 def toB64(data):
@@ -25,7 +32,7 @@ def randB64(size=BS):
 # Add padding to a given string
 def pad(data, bs=BS):
 	count = bs - (len(data)%bs)
-	if type(data) == type(""): return data + chr(count)*count
+	if type(data) == type(""): return (data + chr(count)*count).encode("UTF-8")
 	else: # bytearray
 		res = bytearray(data)
 		for i in range(0, count): res.append(count)
@@ -58,15 +65,12 @@ def deriveText(text, IV=None, iter_count=1):
 	if IV == None: IV = generate128Hash(text)
 	iv = fromB64(IV)
 
-	# derive a 256 bit key from text
-	# TODO: replace with PBKDF2 or bcrypt
-	t1 = text
-	for i in range(0, iter_count):
-		t1 = pad(text+generate256Hash(t1))
-	key = fromB64(generate256Hash(t1))
+	# derive a 256 bit key from text using PBKDF2
+	key = PBKDF2(text, iv, KEY_SIZE, count=iter_count)
+	
 	# encrypt text using key derived from itself
 	cipher = AES.new(key, AES.MODE_CBC, iv)
-	t2 = cipher.encrypt(t1)
+	t2 = cipher.encrypt(pad(text))
 	# encode result in base64
 	return toB64(t2)
 
@@ -101,11 +105,11 @@ def decryptKey(key, ciphertext, IV):
 
 # encrypt data using password and IV
 def encryptPBE(password, plaintext, IV):
-	key = generate256Hash(password) # TODO: change to PBKDF2
+	key = generate256Hash(password) # NOTE: should use deriveText on password first
 	return encryptKey(key, plaintext, IV)
 
 # decrypt data using password and IV
 def decryptPBE(password, ciphertext, IV):
-	key = generate256Hash(password) # TODO: change to PBKDF2
+	key = generate256Hash(password) # NOTE: should use deriveText on password first
 	return decryptKey(key, ciphertext, IV)
 

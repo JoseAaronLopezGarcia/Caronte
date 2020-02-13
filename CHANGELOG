@@ -74,3 +74,8 @@
 	- SGT, KGT and session keys are now encrypted using a temporary key provided by the TGT instead of user password
 	- Simplified some code
 	- Derived Password IV is now encrypted
+
+*** 0.9.4
+	- Implemented use of PBKDF2 for text derivation
+	- Changes to CaronteClient and CaronteSecurity interfaces
+	- Bug fixes

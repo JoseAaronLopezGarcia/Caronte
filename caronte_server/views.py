@@ -55,11 +55,12 @@ class CRAuth(APIView):
 			"version":CARONTE_VERSION,
 			"params":{ # cryptographic parameters used by the server
 				"kdf_iters":CARONTE_ANTI_BRUTEFORCE_ITERS,
-				"key_size":32,
-				"iv_size":16,
-				"crypto":"AES/CBC/NoPadding",
-				"128Hash":"MD5",
-				"256Hash":"SHA"
+				"key_size":security.KEY_SIZE,
+				"iv_size":security.IV_SIZE,
+				"crypto":security.CRYPTO_ENGINE,
+				"128Hash":security.HASH_128,
+				"256Hash":security.HASH_256,
+				"KDF":security.KDF
 			}
 		}
 		return JsonResponse(res)
@@ -342,10 +343,11 @@ class SampleProvider(APIView):
 			user_id = params["ticket"]["ID"]
 			
 			# connect to Caronte Server
-			car_cli = client.CaronteClient("http", "localhost", request.META['SERVER_PORT'])
+			car_cli = client.CaronteClient("localhost", request.META['SERVER_PORT'])
 
 			# login to Caronte
 			if not car_cli.login("sample.provider@caronte.com", "Sampl3Pr0videR"):
+				log("Could not connect to caronte server")
 				return invalidData()
 
 			# validate other ticket and establish a session
